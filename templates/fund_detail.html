@@ -1,0 +1,818 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>基金查询</title>
+    <style>
+        body { font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif; background: #f8f9fa; margin: 0; padding: 0; color: #333; }
+        
+        /* 输入区域容器 */
+        .input-container {
+            position: relative; /* 用于定位下拉列表 */
+            background: white; 
+            padding: 15px 20px; 
+            border-bottom: 1px solid #e0e0e0;
+            display: flex; 
+            gap: 10px; 
+            align-items: center; 
+            flex-wrap: wrap;
+        }
+        
+        .input-area {
+            display: flex;
+            gap: 10px;
+            flex: 1;
+            min-width: 300px;
+            position: relative; /* 用于定位下拉列表 */
+        }
+
+        .input-area input {
+            padding: 8px 12px; 
+            border: 1px solid #ccc; 
+            border-radius: 4px; 
+            flex: 1; 
+            min-width: 120px;
+            font-size: 14px;
+        }
+        
+        .input-area input:focus {
+            border-color: #3498db;
+            outline: none;
+        }
+
+        .input-area button {
+            padding: 8px 16px; 
+            border: none; 
+            border-radius: 4px; 
+            cursor: pointer; 
+            font-weight: 600; 
+            font-size: 14px;
+            transition: background 0.2s;
+        }
+        
+        .btn-primary { background: #3498db; color: white; }
+        .btn-primary:hover { background: #2980b9; }
+        .btn-settings { background: #95a5a6; color: white; }
+        .btn-settings:hover { background: #7f8c8d; }
+
+        /* 搜索结果下拉列表 */
+        .search-results {
+            position: absolute;
+            top: 100%;
+            left: 0;
+            right: 0;
+            background: white;
+            border: 1px solid #ccc;
+            border-top: none;
+            border-radius: 0 0 4px 4px;
+            max-height: 300px;
+            overflow-y: auto;
+            z-index: 1000;
+            display: none; /* 默认隐藏 */
+            box-shadow: 0 4px 6px rgba(0,0,0,0.1);
+        }
+
+        .search-result-item {
+            padding: 8px 12px;
+            cursor: pointer;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            border-bottom: 1px solid #f0f0f0;
+            font-size: 13px;
+        }
+
+        .search-result-item:hover {
+            background-color: #f5f5f5;
+        }
+
+        .result-code {
+            font-weight: bold;
+            color: #2c3e50;
+            min-width: 60px;
+        }
+
+        .result-name {
+            color: #555;
+            flex: 1;
+            text-align: left;
+            margin-left: 10px;
+        }
+
+        .result-type {
+            font-size: 10px;
+            padding: 2px 6px;
+            border-radius: 3px;
+            background: #eee;
+            color: #666;
+        }
+
+        /* 表格 */
+        .table-container { padding: 20px; overflow-x: auto; }
+        table { width: 100%; border-collapse: collapse; background: white; box-shadow: 0 1px 3px rgba(0,0,0,0.1); }
+        th, td { padding: 12px; text-align: left; border-bottom: 1px solid #eee; font-size: 13px; white-space: nowrap; }
+        th { background: #f8f9fa; font-weight: 600; color: #555; }
+        tr:hover { background: #f1f1f1; }
+        
+        /* 状态颜色 */
+        .positive { color: #e74c3c; font-weight: bold; } /* 涨为红 */
+        .negative { color: #27ae60; font-weight: bold; } /* 跌为绿 */
+        .neutral { color: #7f8c8d; }
+
+        /* 底部状态 */
+        .footer-status { padding: 8px 20px; font-size: 12px; color: #666; background: white; border-top: 1px solid #e0e0e0; }
+        .footer-status.error { color: #e74c3c; }
+        .footer-status.paused { color: #f39c12; }
+
+        /* 模态框 */
+        .modal { display: none; position: fixed; top: 0; left: 0; width: 100%; height: 100%; background: rgba(0,0,0,0.5); z-index: 1000; justify-content: center; align-items: center; }
+        .modal-content { background: white; padding: 20px; border-radius: 8px; width: 90%; max-width: 400px; }
+        .modal-content h3 { margin-top: 0; }
+        .modal-content input { width: 100%; padding: 8px; margin: 10px 0; border: 1px solid #ccc; border-radius: 4px; }
+        .modal-buttons { display: flex; justify-content: flex-end; gap: 10px; margin-top: 15px; }
+        .modal-btn { padding: 8px 16px; border: none; border-radius: 4px; cursor: pointer; }
+        .modal-btn.cancel { background: #eee; }
+        .modal-btn.save { background: #3498db; color: white; }
+
+        /* Toast */
+        #localToastContainer { position: fixed; bottom: 20px; left: 50%; transform: translateX(-50%); z-index: 3000; display: flex; flex-direction: column; gap: 10px; width: 90%; max-width: 400px; pointer-events: none; }
+
+        /* 自定义确认对话框 */
+        .confirm-modal {
+            display: none;
+            position: fixed;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            background: rgba(0,0,0,0.5);
+            z-index: 2000;
+            justify-content: center;
+            align-items: center;
+        }
+
+        .confirm-modal-content {
+            background: white;
+            padding: 25px;
+            border-radius: 8px;
+            width: 90%;
+            max-width: 400px;
+            text-align: center;
+            box-shadow: 0 4px 20px rgba(0,0,0,0.3);
+        }
+
+        .confirm-message {
+            margin: 15px 0;
+            font-size: 16px;
+            color: #333;
+        }
+
+        .confirm-buttons {
+            display: flex;
+            justify-content: center;
+            gap: 15px;
+            margin-top: 20px;
+        }
+
+        .confirm-btn {
+            padding: 10px 20px;
+            border: none;
+            border-radius: 4px;
+            cursor: pointer;
+            font-weight: 600;
+            font-size: 14px;
+            transition: background 0.2s;
+        }
+
+        .confirm-btn.confirm {
+            background: #e74c3c;
+            color: white;
+        }
+
+        .confirm-btn.confirm:hover {
+            background: #c0392b;
+        }
+
+        .confirm-btn.cancel {
+            background: #95a5a6;
+            color: white;
+        }
+
+        .confirm-btn.cancel:hover {
+            background: #7f8c8d;
+        }
+    </style>
+</head>
+<body>
+    <!-- 输入区域容器 -->
+    <div class="input-container">
+        <div class="input-area">
+            <input type="text" id="fundCodeInput" placeholder="输入基金代码或名称 (如 000001 或 华夏成长)" autocomplete="off">
+            <button class="btn-primary" onclick="addFund()">添加</button>
+            <!-- 搜索结果下拉列表 -->
+            <div id="searchResults" class="search-results"></div>
+        </div>
+        <button class="btn-settings" onclick="openSettings()">设置</button>
+    </div>
+
+    <!-- 表格区域 -->
+    <div class="table-container">
+        <table>
+            <thead>
+                <tr>
+                    <th>代码</th>
+                    <th>名称</th>
+                    <th>类型</th>
+                    <th>单位净值</th>
+                    <th>估算净值</th>
+                    <th>日涨幅</th>
+                    <th>周涨幅</th>
+                    <th>月涨幅</th>
+                    <th>年涨幅</th>
+                    <th>操作</th>
+                </tr>
+            </thead>
+            <tbody id="fundTableBody">
+                <!-- 动态生成行 -->
+            </tbody>
+        </table>
+    </div>
+
+    <!-- 底部状态 -->
+    <div class="footer-status" id="footerStatus">就绪</div>
+
+    <!-- 设置模态框 -->
+    <div id="settingsModal" class="modal">
+        <div class="modal-content">
+            <h3>刷新设置</h3>
+            <label>基金刷新间隔 (秒):</label>
+            <input type="number" id="refreshIntervalInput" min="10" max="3600" placeholder="600">
+            <div class="modal-buttons">
+                <button class="modal-btn cancel" onclick="closeSettings()">取消</button>
+                <button class="modal-btn save" onclick="saveSettings()">保存</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- Toast 容器 -->
+    <div id="localToastContainer"></div>
+
+    <script>
+        let fundWatchlist = [];
+        let isRefreshing = true;
+        let refreshInterval = null;
+        let refreshTime = 600000; // 默认 10分钟 (600秒 * 1000)
+        let lastRefreshTime = null;
+        let searchTimeout = null; // 用于防抖
+
+        // 页面初始化
+        window.initPage = function() {
+            console.log("Fund page initialized");
+            
+            // 监听父页面消息
+            window.addEventListener('message', function(event) {
+                if (event.origin !== window.location.origin) return;
+                
+                if (event.data.type === 'MANUAL_REFRESH') {
+                    manualRefresh();
+                } else if (event.data.type === 'PAUSE_REFRESH') {
+                    if (isRefreshing) toggleRefresh();
+                } else if (event.data.type === 'RESUME_REFRESH') {
+                    if (!isRefreshing) toggleRefresh();
+                }
+            });
+
+            // 确保 DOM 加载完成后再执行
+            if (document.readyState === 'loading') {
+                document.addEventListener('DOMContentLoaded', startInit);
+            } else {
+                startInit();
+            }
+        };
+
+        function startInit() {
+            // 1. 先获取后端设置，再获取关注列表
+            fetchSettings().then(() => {
+                return fetchFundWatchlist();
+            }).then(() => {
+                manualRefresh();
+                startRefresh();
+            }).catch(err => {
+                console.error("初始化失败:", err);
+                updateFooterStatus("初始化失败，请检查网络或后端服务", "error");
+            });
+        }
+
+        function isTradingTime() {
+            // 基金通常全天都可以查看净值估算，但为了统一逻辑，这里保留交易时间检查
+            // 如果基金不需要交易时间检查，可以始终返回 true
+            const now = new Date();
+            const day = now.getDay();
+            const hour = now.getHours();
+            const minute = now.getMinutes();
+            const time = hour * 60 + minute;
+            if (day === 0 || day === 6) return false;
+            const isAStockTime = (time >= 570 && time <= 690) || (time >= 780 && time <= 900);
+            const isHKStockTime = (time >= 570 && time <= 720) || (time >= 780 && time <= 960);
+            return isAStockTime || isHKStockTime;
+        }
+
+        async function fetchSettings() {
+            try {
+                const response = await fetch('/api/fund/settings');
+                if (!response.ok) throw new Error(`HTTP ${response.status}`);
+                const settings = await response.json();
+                
+                // 优先使用后端返回的基金刷新间隔，如果没有则使用默认值
+                if (settings.fund_refresh_interval) {
+                    refreshTime = settings.fund_refresh_interval * 1000;
+                }
+                return true;
+            } catch (error) {
+                console.error('获取设置失败:', error);
+                showToast('获取设置失败，使用默认值', 'warning');
+                return true; // 继续执行，使用默认值
+            }
+        }
+
+        async function fetchFundWatchlist() {
+            try {
+                const response = await fetch('/api/fund/watchlist');
+                if (!response.ok) throw new Error(`HTTP ${response.status}`);
+                fundWatchlist = await response.json();
+                updateTable();
+                return true;
+            } catch (error) {
+                console.error('获取基金关注列表失败:', error);
+                showToast('获取基金关注列表失败', 'error');
+                return false;
+            }
+        }
+
+        // --- 新增：搜索功能 ---
+        const searchInput = document.getElementById('fundCodeInput');
+        const searchResults = document.getElementById('searchResults');
+
+        // 监听输入事件
+        searchInput.addEventListener('input', function(e) {
+            const query = e.target.value.trim();
+            
+            // 清除之前的定时器
+            if (searchTimeout) clearTimeout(searchTimeout);
+            
+            // 如果输入为空，隐藏下拉列表
+            if (!query) {
+                searchResults.style.display = 'none';
+                return;
+            }
+
+            // 防抖：300ms 后执行搜索
+            searchTimeout = setTimeout(() => {
+                performSearch(query);
+            }, 300);
+        });
+
+        // 点击外部关闭下拉列表
+        document.addEventListener('click', function(e) {
+            if (!searchInput.contains(e.target) && !searchResults.contains(e.target)) {
+                searchResults.style.display = 'none';
+            }
+        });
+
+        async function performSearch(query) {
+            try {
+                // 使用通用的股票搜索接口，因为基金列表也在缓存中
+                // 或者可以创建一个专门的基金搜索接口
+                const response = await fetch(`/api/stock/search?q=${encodeURIComponent(query)}&limit=10`);
+                if (!response.ok) throw new Error(`HTTP ${response.status}`);
+                
+                const results = await response.json();
+                // 过滤出基金（通常基金代码是6位数字，且不在指数列表中）
+                // 这里简单处理：显示所有匹配项，用户自己判断
+                displaySearchResults(results);
+            } catch (error) {
+                console.error('搜索失败:', error);
+                searchResults.innerHTML = '<div class="search-result-item" style="color: #e74c3c;">搜索失败，请检查网络</div>';
+                searchResults.style.display = 'block';
+            }
+        }
+
+        function displaySearchResults(results) {
+            if (results.length === 0) {
+                searchResults.innerHTML = '<div class="search-result-item" style="color: #999;">未找到匹配结果</div>';
+            } else {
+                searchResults.innerHTML = results.map(item => `
+                    <div class="search-result-item" onclick="selectSymbol('${item.code}', '${item.name}')">
+                        <span class="result-code">${item.code}</span>
+                        <span class="result-name">${item.name}</span>
+                        <span class="result-type">${item.type === 'index' ? '指数' : (item.type === 'hk_stock' ? '港股' : (item.type === 'sh_stock' || item.type === 'sz_stock' ? '股票' : '基金'))}</span>
+                    </div>
+                `).join('');
+            }
+            searchResults.style.display = 'block';
+        }
+
+        function selectSymbol(code, name) {
+            searchInput.value = `${code} - ${name}`;
+            searchInput.dataset.code = code; // 存储选中的代码
+            searchResults.style.display = 'none';
+        }
+
+        async function addFund() {
+            const input = document.getElementById('fundCodeInput');
+            let code = input.dataset.code; // 优先使用选中的代码
+            
+            // 如果没有选中代码（用户直接输入），尝试从输入值中提取
+            if (!code) {
+                const rawValue = input.value.trim();
+                // 尝试匹配 "代码 - 名称" 格式
+                const match = rawValue.match(/^(\d{5,6})/);
+                if (match) {
+                    code = match[1];
+                } else {
+                    // 如果没有匹配到代码，提示错误
+                    showToast('请从下拉列表中选择正确的基金', 'warning');
+                    return;
+                }
+            }
+
+            if (!code) { 
+                showToast('请输入基金代码', 'warning'); 
+                return; 
+            }
+            
+            if (fundWatchlist.includes(code)) { 
+                showToast(`${code} 已在关注列表中`, 'error'); 
+                return; 
+            }
+            
+            try {
+                const response = await fetch('/api/fund/watchlist', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ code })
+                });
+                const result = await response.json();
+                if (response.ok) {
+                    fundWatchlist = result.watchlist;
+                    updateTable();
+                    input.value = '';
+                    input.dataset.code = ''; // 清除选中的代码
+                    showToast(`成功添加 ${code}`, 'success');
+                    manualRefresh();
+                } else {
+                    showToast(result.error, 'error');
+                }
+            } catch (error) {
+                console.error('添加基金失败:', error);
+                showToast('添加基金失败', 'error');
+            }
+        }
+
+        async function deleteFund(code) {
+            showCustomConfirm(`确定要删除 ${code} 吗？`, async () => {
+                try {
+                    const response = await fetch('/api/fund/watchlist', {
+                        method: 'DELETE',
+                        headers: { 'Content-Type': 'application/json' },
+                        body: JSON.stringify({ code })
+                    });
+                    const result = await response.json();
+                    if (response.ok) {
+                        fundWatchlist = result.watchlist;
+                        updateTable();
+                        showToast(`成功删除 ${code}`, 'success');
+                        manualRefresh();
+                    } else {
+                        showToast(result.error, 'error');
+                    }
+                } catch (error) {
+                    console.error('删除基金失败:', error);
+                    showToast('删除基金失败', 'error');
+                }
+            });
+        }
+
+        function toggleRefresh() {
+            if (isRefreshing) {
+                isRefreshing = false;
+                clearInterval(refreshInterval);
+                updateFooterStatus('刷新已暂停', 'paused');
+                showToast('刷新已暂停', 'warning');
+            } else {
+                isRefreshing = true;
+                startRefresh();
+                updateFooterStatus('刷新已恢复', 'refreshing');
+                showToast('刷新已恢复', 'success');
+            }
+        }
+
+        function manualRefresh() {
+            showToast('正在手动刷新...', 'info');
+            fetchPrices(true);
+        }
+
+        function openSettings() {
+            const modal = document.getElementById('settingsModal');
+            const input = document.getElementById('refreshIntervalInput');
+            input.value = refreshTime / 1000;
+            modal.style.display = 'flex';
+        }
+
+        function closeSettings() {
+            const modal = document.getElementById('settingsModal');
+            modal.style.display = 'none';
+        }
+
+        async function saveSettings() {
+            const input = document.getElementById('refreshIntervalInput');
+            const newInterval = parseInt(input.value);
+            if (newInterval < 10 || newInterval > 3600) {
+                showToast('刷新间隔必须在10到3600秒之间', 'error');
+                return;
+            }
+            try {
+                const response = await fetch('/api/fund/settings', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ fund_refresh_interval: newInterval })
+                });
+                const result = await response.json();
+                if (response.ok) {
+                    refreshTime = newInterval * 1000;
+                    showToast(`刷新间隔已设置为 ${newInterval} 秒`, 'success');
+                    if (isRefreshing) startRefresh();
+                    closeSettings();
+                } else {
+                    showToast(result.error, 'error');
+                }
+            } catch (error) {
+                console.error('保存设置失败:', error);
+                showToast('保存设置失败', 'error');
+            }
+        }
+
+        function startRefresh() {
+            if (refreshInterval) clearInterval(refreshInterval);
+
+            // 只有在页面可见时才启动定时器
+            if (typeof isPageVisible === 'undefined' || isPageVisible) {
+                checkAndFetch();
+                refreshInterval = setInterval(checkAndFetch, refreshTime);
+            }
+        }
+
+        function checkAndFetch() {
+            // 检查是否应该获取数据：用户未暂停刷新 且 页面可见
+            if (!isRefreshing) {
+                updateFooterStatus('用户已暂停刷新', 'paused');
+                return;
+            }
+            if (typeof isPageVisible !== 'undefined' && !isPageVisible) {
+                // 页面不可见时，不获取数据
+                return;
+            }
+            if (!isTradingTime()) {
+                const now = new Date();
+                const timeStr = now.toLocaleTimeString('zh-CN', { hour: '2-digit', minute: '2-digit' });
+                updateFooterStatus(`非交易时间 (当前: ${timeStr})`, 'closed');
+                return;
+            }
+            fetchPrices();
+        }
+
+        async function fetchPrices(isManual = false) {
+            try {
+                const response = await fetch('/api/fund/prices');
+                
+                if (!response.ok) {
+                    const errorData = await response.json().catch(() => ({}));
+                    throw new Error(errorData.error || `HTTP ${response.status}`);
+                }
+
+                const prices = await response.json();
+                prices.forEach(priceData => updateRow(priceData));
+                
+                lastRefreshTime = new Date();
+                const statusText = isManual ? '手动刷新成功' : '刷新成功';
+                updateFooterStatus(`${statusText} | 上次刷新: ${lastRefreshTime.toLocaleTimeString()}`, 'refreshing');
+                
+            } catch (error) {
+                console.error('获取基金价格失败:', error);
+                updateFooterStatus(`获取基金价格失败: ${error.message}`, 'error');
+                showToast('获取基金价格失败', 'error');
+            }
+        }
+
+        function createRow(code) {
+            const tbody = document.getElementById('fundTableBody');
+            if (!tbody) return;
+            const row = document.createElement('tr');
+            row.id = `row-${code}`;
+            row.innerHTML = `
+                <td>${code}</td>
+                <td id="name-${code}">--</td>
+                <td id="type-${code}">--</td>
+                <td id="netWorth-${code}">--</td>
+                <td id="expectWorth-${code}">--</td>
+                <td id="dayGrowth-${code}">--</td>
+                <td id="lastWeekGrowth-${code}">--</td>
+                <td id="lastMonthGrowth-${code}">--</td>
+                <td id="lastYearGrowth-${code}">--</td>
+                <td><button class="delete" onclick="deleteFund('${code}')">删除</button></td>
+            `;
+            tbody.appendChild(row);
+        }
+
+        function updateTable() {
+            const tbody = document.getElementById('fundTableBody');
+            if (!tbody) return;
+            tbody.innerHTML = '';
+            fundWatchlist.forEach(code => createRow(code));
+        }
+
+        function updateRow(priceData) {
+            const code = priceData.code;
+            const row = document.getElementById(`row-${code}`);
+            if (!row) return;
+            
+            const nameCell = document.getElementById(`name-${code}`);
+            if (nameCell) nameCell.textContent = priceData.name || '--';
+            
+            const typeCell = document.getElementById(`type-${code}`);
+            if (typeCell) typeCell.textContent = priceData.type || '--';
+            
+            const netWorthCell = document.getElementById(`netWorth-${code}`);
+            if (netWorthCell) netWorthCell.textContent = priceData.netWorth !== null && priceData.netWorth !== undefined ? priceData.netWorth.toFixed(4) : '--';
+            
+            const expectWorthCell = document.getElementById(`expectWorth-${code}`);
+            if (expectWorthCell) expectWorthCell.textContent = priceData.expectWorth !== null && priceData.expectWorth !== undefined ? priceData.expectWorth.toFixed(4) : '--';
+            
+            const dayGrowthCell = document.getElementById(`dayGrowth-${code}`);
+            if (dayGrowthCell) {
+                if (priceData.dayGrowth !== null && priceData.dayGrowth !== undefined) {
+                    dayGrowthCell.textContent = priceData.dayGrowth.toFixed(2) + '%';
+                    dayGrowthCell.className = priceData.dayGrowth > 0 ? 'positive' : (priceData.dayGrowth < 0 ? 'negative' : 'neutral');
+                } else {
+                    dayGrowthCell.textContent = '--';
+                    dayGrowthCell.className = '';
+                }
+            }
+            
+            const lastWeekGrowthCell = document.getElementById(`lastWeekGrowth-${code}`);
+            if (lastWeekGrowthCell) {
+                if (priceData.lastWeekGrowth !== null && priceData.lastWeekGrowth !== undefined) {
+                    lastWeekGrowthCell.textContent = priceData.lastWeekGrowth.toFixed(2) + '%';
+                    lastWeekGrowthCell.className = priceData.lastWeekGrowth > 0 ? 'positive' : (priceData.lastWeekGrowth < 0 ? 'negative' : 'neutral');
+                } else {
+                    lastWeekGrowthCell.textContent = '--';
+                    lastWeekGrowthCell.className = '';
+                }
+            }
+            
+            const lastMonthGrowthCell = document.getElementById(`lastMonthGrowth-${code}`);
+            if (lastMonthGrowthCell) {
+                if (priceData.lastMonthGrowth !== null && priceData.lastMonthGrowth !== undefined) {
+                    lastMonthGrowthCell.textContent = priceData.lastMonthGrowth.toFixed(2) + '%';
+                    lastMonthGrowthCell.className = priceData.lastMonthGrowth > 0 ? 'positive' : (priceData.lastMonthGrowth < 0 ? 'negative' : 'neutral');
+                } else {
+                    lastMonthGrowthCell.textContent = '--';
+                    lastMonthGrowthCell.className = '';
+                }
+            }
+            
+            const lastYearGrowthCell = document.getElementById(`lastYearGrowth-${code}`);
+            if (lastYearGrowthCell) {
+                if (priceData.lastYearGrowth !== null && priceData.lastYearGrowth !== undefined) {
+                    lastYearGrowthCell.textContent = priceData.lastYearGrowth.toFixed(2) + '%';
+                    lastYearGrowthCell.className = priceData.lastYearGrowth > 0 ? 'positive' : (priceData.lastYearGrowth < 0 ? 'negative' : 'neutral');
+                } else {
+                    lastYearGrowthCell.textContent = '--';
+                    lastYearGrowthCell.className = '';
+                }
+            }
+        }
+
+        function updateFooterStatus(message, type) {
+            const footerStatusDiv = document.getElementById('footerStatus');
+            if (!footerStatusDiv) return;
+            footerStatusDiv.textContent = message;
+            footerStatusDiv.className = `footer-status ${type}`;
+        }
+
+        function showToast(message, type = 'info') {
+            console.log(`[${type}] ${message}`);
+            if (window.parent && window.parent.showToast) {
+                try {
+                    window.parent.showToast(message, type);
+                    return;
+                } catch (e) {}
+            }
+            // 本地回退
+            const containerId = 'localToastContainer';
+            let container = document.getElementById(containerId);
+            if (!container) {
+                container = document.createElement('div');
+                container.id = containerId;
+                container.style.cssText = `position: fixed; bottom: 20px; left: 50%; transform: translateX(-50%); z-index: 3000; display: flex; flex-direction: column; gap: 10px; width: 90%; max-width: 400px; pointer-events: none;`;
+                document.body.appendChild(container);
+            }
+            const toast = document.createElement('div');
+            let bgColor = '#3498db';
+            if (type === 'success') bgColor = '#27ae60';
+            if (type === 'error') bgColor = '#e74c3c';
+            if (type === 'warning') bgColor = '#f39c12';
+            toast.style.cssText = `padding: 12px 20px; border-radius: 8px; color: white; font-weight: bold; box-shadow: 0 2px 8px rgba(0,0,0,0.2); text-align: center; background-color: ${bgColor}; pointer-events: auto; box-sizing: border-box; animation: slideIn 0.3s ease-out, fadeOut 0.3s ease-in 2.7s forwards;`;
+            toast.textContent = message;
+            container.appendChild(toast);
+            setTimeout(() => { if (toast.parentNode) toast.parentNode.removeChild(toast); }, 3000);
+        }
+
+        // 页面可见性控制变量
+        let isPageVisible = true;
+        let refreshWasActive = false;
+
+        // 页面可见性变化处理
+        function handleVisibilityChange() {
+            isPageVisible = !document.hidden;
+
+            if (isPageVisible) {
+                // 页面变为可见时，如果之前刷新是激活的，则恢复刷新
+                if (refreshWasActive && isRefreshing) {
+                    startRefresh();
+                }
+            } else {
+                // 页面变为不可见时，暂停刷新
+                if (isRefreshing) {
+                    refreshWasActive = true;
+                    if (refreshInterval) {
+                        clearInterval(refreshInterval);
+                        refreshInterval = null;
+                        updateFooterStatus('页面不可见，数据刷新已暂停', 'paused');
+                    }
+                } else {
+                    refreshWasActive = false;
+                }
+            }
+        }
+
+        // 自定义确认对话框
+        function showCustomConfirm(message, onConfirm, onCancel) {
+            // 创建遮罩层
+            const overlay = document.createElement('div');
+            overlay.className = 'confirm-modal';
+            overlay.id = 'customConfirmOverlay';
+
+            // 创建对话框内容
+            overlay.innerHTML = `
+                <div class="confirm-modal-content">
+                    <div class="confirm-message">${message}</div>
+                    <div class="confirm-buttons">
+                        <button class="confirm-btn confirm" onclick="handleConfirmAction(true)">确定</button>
+                        <button class="confirm-btn cancel" onclick="handleConfirmAction(false)">取消</button>
+                    </div>
+                </div>
+            `;
+
+            // 添加到页面
+            document.body.appendChild(overlay);
+
+            // 显示对话框
+            overlay.style.display = 'flex';
+
+            // 保存回调函数
+            window.currentConfirmCallback = {
+                onConfirm: onConfirm,
+                onCancel: onCancel || (() => {})
+            };
+        }
+
+        // 处理确认操作
+        function handleConfirmAction(confirmed) {
+            const overlay = document.getElementById('customConfirmOverlay');
+            if (overlay) {
+                overlay.remove();
+            }
+
+            if (window.currentConfirmCallback) {
+                if (confirmed && window.currentConfirmCallback.onConfirm) {
+                    window.currentConfirmCallback.onConfirm();
+                } else if (!confirmed && window.currentConfirmCallback.onCancel) {
+                    window.currentConfirmCallback.onCancel();
+                }
+                // 清除回调
+                delete window.currentConfirmCallback;
+            }
+        }
+
+        // 页面加载完成后执行初始化
+        document.addEventListener('DOMContentLoaded', function() {
+            // 添加页面可见性监听器
+            document.addEventListener('visibilitychange', handleVisibilityChange);
+
+            window.initPage();
+        });
+    </script>
+</body>
+</html>

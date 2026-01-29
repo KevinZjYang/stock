@@ -1,0 +1,1395 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>股票监控</title>
+    <style>
+        body { font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif; background: #f8f9fa; margin: 0; padding: 0; color: #333; }
+        
+        /* 输入区域容器 */
+        .input-container {
+            position: relative; /* 用于定位下拉列表 */
+            background: white; 
+            padding: 15px 20px; 
+            border-bottom: 1px solid #e0e0e0;
+            display: flex; 
+            gap: 10px; 
+            align-items: center; 
+            flex-wrap: wrap;
+        }
+        
+        .input-area {
+            display: flex;
+            gap: 10px;
+            flex: 1;
+            min-width: 300px;
+            position: relative; /* 用于定位下拉列表 */
+        }
+
+        .input-area input {
+            padding: 8px 12px; 
+            border: 1px solid #ccc; 
+            border-radius: 4px; 
+            flex: 1; 
+            min-width: 120px;
+            font-size: 14px;
+        }
+        
+        .input-area input:focus {
+            border-color: #3498db;
+            outline: none;
+        }
+
+        .input-area button {
+            padding: 8px 16px; 
+            border: none; 
+            border-radius: 4px; 
+            cursor: pointer; 
+            font-weight: 600; 
+            font-size: 14px;
+            transition: background 0.2s;
+        }
+        
+        .btn-primary { background: #3498db; color: white; }
+        .btn-primary:hover { background: #2980b9; }
+        .btn-settings { background: #95a5a6; color: white; }
+        .btn-settings:hover { background: #7f8c8d; }
+
+        /* 搜索结果下拉列表 */
+        .search-results {
+            position: absolute;
+            top: 100%;
+            left: 0;
+            right: 0;
+            background: white;
+            border: 1px solid #ccc;
+            border-top: none;
+            border-radius: 0 0 4px 4px;
+            max-height: 300px;
+            overflow-y: auto;
+            z-index: 1000;
+            display: none; /* 默认隐藏 */
+            box-shadow: 0 4px 6px rgba(0,0,0,0.1);
+        }
+
+        .search-result-item {
+            padding: 8px 12px;
+            cursor: pointer;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            border-bottom: 1px solid #f0f0f0;
+            font-size: 13px;
+        }
+
+        .search-result-item:hover {
+            background-color: #f5f5f5;
+        }
+
+        .result-code {
+            font-weight: bold;
+            color: #2c3e50;
+            min-width: 60px;
+        }
+
+        .result-name {
+            color: #555;
+            flex: 1;
+            text-align: left;
+            margin-left: 10px;
+        }
+
+        .result-type {
+            font-size: 10px;
+            padding: 2px 6px;
+            border-radius: 3px;
+            background: #eee;
+            color: #666;
+        }
+
+        .result-type.index { background: #e3f2fd; color: #1565c0; }
+        .result-type.sh_stock { background: #e3f2fd; color: #1565c0; } /* SH */
+        .result-type.sz_stock { background: #e8f5e9; color: #2e7d32; } /* SZ */
+        .result-type.hk_stock { background: #fff3e0; color: #ef6c00; } /* HK */
+        .result-type.us_stock { background: #fce4ec; color: #c2185b; } /* US */
+
+        /* 指数卡片 */
+        .index-container { display: flex; gap: 15px; padding: 10px 20px; background: white; border-bottom: 1px solid #e0e0e0; }
+        .index-card { flex: 1; padding: 10px; border-radius: 6px; background: #f8f9fa; border: 1px solid #e0e0e0; }
+        .index-card h4 { margin: 0 0 5px 0; font-size: 14px; color: #555; }
+        .index-value { font-size: 18px; font-weight: bold; }
+        .index-change { font-size: 14px; margin-top: 2px; }
+        
+        /* 表格 */
+        .table-container { padding: 20px; overflow-x: auto; }
+        table { width: 100%; border-collapse: collapse; background: white; box-shadow: 0 1px 3px rgba(0,0,0,0.1); }
+        th, td { padding: 12px; text-align: left; border-bottom: 1px solid #eee; font-size: 13px; white-space: nowrap; }
+        th { background: #f8f9fa; font-weight: 600; color: #555; }
+        tr:hover { background: #f1f1f1; }
+        
+        /* 状态颜色 */
+        .positive { color: #e74c3c; font-weight: bold; } /* 涨为红 */
+        .negative { color: #27ae60; font-weight: bold; } /* 跌为绿 */
+        .neutral { color: #7f8c8d; }
+        
+        .type-badge { padding: 2px 6px; border-radius: 4px; font-size: 11px; font-weight: bold; }
+        .type-11 { background: #e3f2fd; color: #1565c0; } /* A股 */
+        .type-12 { background: #e8f5e9; color: #2e7d32; } /* B股 */
+        .type-13 { background: #fff3e0; color: #ef6c00; } /* 港股 */
+        .type-14 { background: #fce4ec; color: #c2185b; } /* 可转债 */
+        .type-15 { background: #e8f5e9; color: #2e7d32; } /* 基金 */
+        .type-16 { background: #fff3e0; color: #ef6c00; } /* 美股 */
+        .type-20 { background: #e3f2fd; color: #1565c0; } /* 指数 */
+        .type-SH { background: #e3f2fd; color: #1565c0; } /* 上海 */
+        .type-SZ { background: #e8f5e9; color: #2e7d32; } /* 深圳 */
+        .type-HK { background: #fff3e0; color: #ef6c00; } /* 港股 */
+        .type-US { background: #fce4ec; color: #c2185b; } /* 美股 */
+        .type-指数 { background: #e3f2fd; color: #1565c0; } /* 指数 */
+        .type-unknown { background: #eee; color: #666; }
+        
+        .currency-badge { background: #eee; padding: 2px 6px; border-radius: 4px; font-size: 11px; }
+
+        /* 底部状态 */
+        .footer-status { padding: 8px 20px; font-size: 12px; color: #666; background: white; border-top: 1px solid #e0e0e0; }
+        .footer-status.error { color: #e74c3c; }
+        .footer-status.paused { color: #f39c12; }
+
+        /* 模态框 */
+        .modal { display: none; position: fixed; top: 0; left: 0; width: 100%; height: 100%; background: rgba(0,0,0,0.5); z-index: 1000; justify-content: center; align-items: center; }
+        .modal-content { background: white; padding: 20px; border-radius: 8px; width: 90%; max-width: 400px; }
+        .modal-content.large { max-width: 800px; width: 90%; max-height: 80vh; overflow: hidden; }
+        .modal-content h3 { margin-top: 0; }
+        .modal-content input { width: 100%; padding: 8px; margin: 10px 0; border: 1px solid #ccc; border-radius: 4px; }
+        .modal-buttons { display: flex; justify-content: flex-end; gap: 10px; margin-top: 15px; }
+        .modal-btn { padding: 8px 16px; border: none; border-radius: 4px; cursor: pointer; }
+        .modal-btn.cancel { background: #eee; }
+        .modal-btn.save { background: #3498db; color: white; }
+
+        /* Toast */
+        #localToastContainer { position: fixed; bottom: 20px; left: 50%; transform: translateX(-50%); z-index: 3000; display: flex; flex-direction: column; gap: 10px; width: 90%; max-width: 400px; pointer-events: none; }
+
+        /* 响应式设计 */
+        @media screen and (max-width: 768px) {
+            .input-container {
+                flex-direction: column;
+                gap: 10px;
+                padding: 10px 15px;
+            }
+
+            .input-area {
+                width: 100%;
+            }
+
+            .index-container {
+                flex-direction: column;
+                gap: 10px;
+                padding: 10px 15px;
+            }
+
+            .index-card {
+                width: 100%;
+            }
+
+            .table-container {
+                padding: 10px;
+            }
+
+            table {
+                font-size: 12px;
+            }
+
+            th, td {
+                padding: 8px 6px;
+                font-size: 11px;
+            }
+
+            .footer-status {
+                padding: 6px 10px;
+                font-size: 11px;
+            }
+
+            .modal-content {
+                width: 95%;
+                margin: 20px auto;
+            }
+
+            .search-results {
+                max-height: 200px;
+            }
+        }
+
+        @media screen and (max-width: 480px) {
+            .input-container {
+                padding: 8px 10px;
+            }
+
+            .input-area input {
+                min-width: 0;
+            }
+
+            .index-container {
+                padding: 8px 10px;
+            }
+
+            table {
+                font-size: 11px;
+            }
+
+            th, td {
+                padding: 6px 4px;
+                font-size: 10px;
+            }
+
+            .type-badge, .currency-badge {
+                font-size: 9px;
+                padding: 1px 4px;
+            }
+
+            .footer-status {
+                font-size: 10px;
+                padding: 5px 8px;
+            }
+        }
+
+        /* 优化移动端触摸体验 */
+        button, .search-result-item {
+            touch-action: manipulation;
+        }
+
+        /* 优化滚动条外观 */
+        ::-webkit-scrollbar {
+            width: 8px;
+            height: 8px;
+        }
+
+        ::-webkit-scrollbar-track {
+            background: #f1f1f1;
+            border-radius: 4px;
+        }
+
+        ::-webkit-scrollbar-thumb {
+            background: #c1c1c1;
+            border-radius: 4px;
+        }
+
+        ::-webkit-scrollbar-thumb:hover {
+            background: #a8a8a8;
+        }
+
+        /* 自定义确认对话框 */
+        .confirm-modal {
+            display: none;
+            position: fixed;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            background: rgba(0,0,0,0.5);
+            z-index: 2000;
+            justify-content: center;
+            align-items: center;
+        }
+
+        .confirm-modal-content {
+            background: white;
+            padding: 25px;
+            border-radius: 8px;
+            width: 90%;
+            max-width: 400px;
+            text-align: center;
+            box-shadow: 0 4px 20px rgba(0,0,0,0.3);
+        }
+
+        .confirm-message {
+            margin: 15px 0;
+            font-size: 16px;
+            color: #333;
+        }
+
+        .confirm-buttons {
+            display: flex;
+            justify-content: center;
+            gap: 15px;
+            margin-top: 20px;
+        }
+
+        .confirm-btn {
+            padding: 10px 20px;
+            border: none;
+            border-radius: 4px;
+            cursor: pointer;
+            font-weight: 600;
+            font-size: 14px;
+            transition: background 0.2s;
+        }
+
+        .confirm-btn.confirm {
+            background: #e74c3c;
+            color: white;
+        }
+
+        .confirm-btn.confirm:hover {
+            background: #c0392b;
+        }
+
+        .confirm-btn.cancel {
+            background: #95a5a6;
+            color: white;
+        }
+
+        .confirm-btn.cancel:hover {
+            background: #7f8c8d;
+        }
+    </style>
+</head>
+<body>
+    <!-- 输入区域容器 -->
+    <div class="input-container">
+        <div class="input-area">
+            <input type="text" id="symbolInput" placeholder="输入股票代码或名称 (如 600519 或 贵州茅台)" autocomplete="off">
+            <button class="btn-primary" onclick="addSymbol()">添加</button>
+            <!-- 搜索结果下拉列表 -->
+            <div id="searchResults" class="search-results"></div>
+        </div>
+        <button class="btn-settings" onclick="openSettings()">设置</button>
+        <button class="btn-settings" onclick="openIndexConfig()">指数配置</button>
+    </div>
+
+    <!-- 指数显示 -->
+    <div class="index-container" id="indexContainer">
+        <!-- 指数卡片将通过JavaScript动态生成 -->
+    </div>
+
+    <!-- 表格区域 -->
+    <div class="table-container">
+        <table>
+            <thead>
+                <tr>
+                    <th>代码</th>
+                    <th>名称</th>
+                    <th>类型</th>
+                    <th>币种</th>
+                    <th>当前价</th>
+                    <th>涨跌额</th>
+                    <th>涨跌幅</th>
+                    <th>今开</th>
+                    <th>最高</th>
+                    <th>最低</th>
+                    <th>操作</th>
+                </tr>
+            </thead>
+            <tbody id="stockTableBody">
+                <!-- 动态生成行 -->
+            </tbody>
+        </table>
+    </div>
+
+    <!-- 底部状态 -->
+    <div class="footer-status" id="footerStatus">就绪</div>
+
+    <!-- 设置模态框 -->
+    <div id="settingsModal" class="modal">
+        <div class="modal-content">
+            <h3>刷新设置</h3>
+            <label>股票刷新间隔 (秒):</label>
+            <input type="number" id="refreshIntervalInput" min="1" max="60" placeholder="10">
+            <div class="modal-buttons">
+                <button class="modal-btn cancel" onclick="closeSettings()">取消</button>
+                <button class="modal-btn save" onclick="saveSettings()">保存</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- Toast 容器 -->
+    <div id="localToastContainer"></div>
+
+    <script>
+        let watchlist = [];
+        let isRefreshing = true;
+        let refreshInterval = null;
+        let refreshTime = 10000; // 默认 10秒
+        let lastRefreshTime = null;
+        let searchTimeout = null; // 用于防抖
+        let selectedSymbol = null; // 存储选中的股票信息 {code, name, type}
+
+        // 页面初始化
+        window.initPage = function() {
+            console.log("Stock page initialized");
+            
+            // 监听父页面消息
+            window.addEventListener('message', function(event) {
+                if (event.origin !== window.location.origin) return;
+                
+                if (event.data.type === 'MANUAL_REFRESH') {
+                    manualRefresh();
+                } else if (event.data.type === 'PAUSE_REFRESH') {
+                    if (isRefreshing) toggleRefresh();
+                } else if (event.data.type === 'RESUME_REFRESH') {
+                    if (!isRefreshing) toggleRefresh();
+                }
+            });
+
+            // 确保 DOM 加载完成后再执行
+            if (document.readyState === 'loading') {
+                document.addEventListener('DOMContentLoaded', startInit);
+            } else {
+                startInit();
+            }
+        };
+
+        function startInit() {
+            // 1. 先获取后端设置，再获取关注列表
+            fetchSettings().then(() => {
+                return fetchWatchlist();
+            }).then(() => {
+                // 加载指数数据
+                loadIndexData();
+                // 立即开始刷新，这样即使数据还在加载，用户也能看到缓存数据
+                startRefresh();
+                // 然后手动刷新一次以获取最新数据
+                manualRefresh();
+            }).catch(err => {
+                console.error("初始化失败:", err);
+                updateFooterStatus("初始化失败，请检查网络或后端服务", "error");
+            });
+        }
+
+        function isTradingTime() {
+            const now = new Date();
+            const day = now.getDay();
+            const hour = now.getHours();
+            const minute = now.getMinutes();
+            const time = hour * 60 + minute;
+            if (day === 0 || day === 6) return false;
+            const isAStockTime = (time >= 570 && time <= 690) || (time >= 780 && time <= 900);
+            const isHKStockTime = (time >= 570 && time <= 720) || (time >= 780 && time <= 960);
+            return isAStockTime || isHKStockTime;
+        }
+
+        async function fetchSettings() {
+            try {
+                const response = await fetch('/api/stock/settings');
+                if (!response.ok) throw new Error(`HTTP ${response.status}`);
+                const settings = await response.json();
+                
+                if (settings.stock_refresh_interval) {
+                    refreshTime = settings.stock_refresh_interval * 1000;
+                }
+                return true;
+            } catch (error) {
+                console.error('获取设置失败:', error);
+                showToast('获取设置失败，使用默认值', 'warning');
+                return true;
+            }
+        }
+
+        async function fetchWatchlist() {
+            try {
+                const response = await fetch('/api/stock/watchlist');
+                if (!response.ok) throw new Error(`HTTP ${response.status}`);
+                const result = await response.json();
+
+                // 从后端返回的对象中提取 watchlist 数组
+                const data = Array.isArray(result) ? result : result.watchlist || [];
+
+                // 处理新旧格式兼容
+                watchlist = data.map(item => {
+                    if (typeof item === 'string') {
+                        return { symbol: item, name: item };
+                    }
+                    // 如果是新格式，将 code 映射到 symbol
+                    if (item && typeof item === 'object' && item.code) {
+                        return {
+                            symbol: item.code,
+                            name: item.name || item.code,
+                            type: item.type
+                        };
+                    }
+                    return item;
+                });
+
+                updateTable();
+                return true;
+            } catch (error) {
+                console.error('获取关注列表失败:', error);
+                showToast('获取关注列表失败', 'error');
+                return false;
+            }
+        }
+
+        // --- 新增：搜索功能 ---
+        const searchInput = document.getElementById('symbolInput');
+        const searchResults = document.getElementById('searchResults');
+
+        // 监听输入事件
+        searchInput.addEventListener('input', function(e) {
+            const query = e.target.value.trim();
+
+            // 清除之前的定时器
+            if (searchTimeout) clearTimeout(searchTimeout);
+
+            // 如果输入为空，隐藏下拉列表
+            if (!query) {
+                searchResults.style.display = 'none';
+                return;
+            }
+
+            // 防抖：300ms 后执行搜索
+            searchTimeout = setTimeout(() => {
+                performSearch(query);
+            }, 300);
+        });
+
+        // 点击外部关闭下拉列表
+        document.addEventListener('click', function(e) {
+            if (!searchInput.contains(e.target) && !searchResults.contains(e.target)) {
+                searchResults.style.display = 'none';
+            }
+        });
+
+        async function performSearch(query) {
+            try {
+                // 使用新的API端点，从数据库搜索
+                const response = await fetch(`/api/stock/search?code=${encodeURIComponent(query)}`);
+                if (!response.ok) throw new Error(`HTTP ${response.status}`);
+
+                const data = await response.json();
+                // 使用excel_results，这是从数据库返回的数据
+                displaySearchResults(data.excel_results || []);
+            } catch (error) {
+                console.error('搜索失败:', error);
+                searchResults.innerHTML = '<div class="search-result-item" style="color: #e74c3c;">搜索失败，请检查网络</div>';
+                searchResults.style.display = 'block';
+            }
+        }
+
+        function displaySearchResults(results) {
+            if (results.length === 0) {
+                searchResults.innerHTML = '<div class="search-result-item" style="color: #999;">未找到匹配结果</div>';
+            } else {
+                searchResults.innerHTML = results.map(item => {
+                    // 根据市场类型显示不同的标签
+                    let typeLabel = '';
+                    let typeClass = '';
+                    switch(item.type) {
+                        case 'sh_stock':
+                            typeLabel = 'SH';
+                            typeClass = 'sh_stock';
+                            break;
+                        case 'sz_stock':
+                            typeLabel = 'SZ';
+                            typeClass = 'sz_stock';
+                            break;
+                        case 'hk_stock':
+                            typeLabel = 'HK';
+                            typeClass = 'hk_stock';
+                            break;
+                        case 'us_stock':
+                            typeLabel = 'US';
+                            typeClass = 'us_stock';
+                            break;
+                        case 'index':
+                            typeLabel = '指数';
+                            typeClass = 'index';
+                            break;
+                        default:
+                            typeLabel = '股票';
+                            typeClass = 'stock';
+                    }
+                    return `
+                        <div class="search-result-item" onclick="selectSymbol('${item.code}', '${item.name}', '${item.type}')">
+                            <span class="result-code">${item.code}</span>
+                            <span class="result-name">${item.name}</span>
+                            <span class="result-type ${typeClass}">${typeLabel}</span>
+                        </div>
+                    `;
+                }).join('');
+            }
+            searchResults.style.display = 'block';
+        }
+
+        function selectSymbol(code, name, type) {
+            // 保存选中的完整信息
+            selectedSymbol = { code: code, name: name, type: type };
+
+            // 显示在输入框中
+            searchInput.value = `${code} - ${name}`;
+            searchResults.style.display = 'none';
+        }
+
+        async function addSymbol() {
+            const input = document.getElementById('symbolInput');
+            let code = null;
+            let name = null;
+            let type = null;
+            
+            // 优先使用选中的信息
+            if (selectedSymbol && selectedSymbol.code) {
+                code = selectedSymbol.code;
+                name = selectedSymbol.name;
+                type = selectedSymbol.type;
+            } else {
+                // 如果没有选中，尝试从输入值中提取
+                const rawValue = input.value.trim();
+                if (!rawValue) {
+                    showToast('请输入股票代码或从下拉列表中选择', 'warning');
+                    return;
+                }
+                
+                // 尝试匹配 "代码 - 名称" 格式
+                const match = rawValue.match(/^([A-Za-z0-9]+)\s*-\s*(.+)$/);
+                if (match) {
+                    code = match[1];
+                    name = match[2];
+                    // 根据代码判断类型
+                    type = determineType(code);
+                } else {
+                    // 如果没有匹配到格式，尝试提取前几个字符作为代码
+                    const codeMatch = rawValue.match(/^([A-Za-z0-9]+)/);
+                    if (codeMatch) {
+                        code = codeMatch[1];
+                        name = rawValue; // 使用整个输入作为名称
+                        type = determineType(code);
+                    } else {
+                        showToast('请输入正确的股票代码或从下拉列表中选择', 'warning');
+                        return;
+                    }
+                }
+            }
+
+            if (!code) { 
+                showToast('请输入股票代码', 'warning'); 
+                return; 
+            }
+            
+            // 新增：清理代码前缀（如 sh、sz、hk）
+            code = cleanCodePrefix(code);
+            
+            // 检查是否已存在
+            const exists = watchlist.some(item => item.symbol === code);
+            if (exists) { 
+                showToast(`${code} 已在关注列表中`, 'error'); 
+                return; 
+            }
+            
+            try {
+                const response = await fetch('/api/stock/watchlist', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ code: code, name: name })
+                });
+                const result = await response.json();
+                if (response.ok) {
+                    // 优化：直接添加到本地关注列表，而不是重新获取整个列表
+                    // 检查股票是否已经在本地列表中
+                    const existsLocally = watchlist.some(item => item.symbol === code);
+                    if (!existsLocally) {
+                        // 添加到本地关注列表
+                        watchlist.push({ symbol: code, name: name });
+                        // 创建新的表格行
+                        createRow({ symbol: code, name: name });
+
+                        // 立即获取新添加股票的数据
+                        const stockData = await fetchBatchStockData([code]);
+                        if (stockData && stockData.length > 0) {
+                            updateRow(stockData[0]); // 更新表格行显示数据
+                        }
+                    }
+
+                    input.value = '';
+                    selectedSymbol = null; // 清除选中的信息
+                    showToast(`成功添加 ${code} - ${name}`, 'success');
+                    // 不再立即刷新所有数据，让定期刷新机制处理
+                } else {
+                    showToast(result.error, 'error');
+                }
+            } catch (error) {
+                console.error('添加股票失败:', error);
+                showToast('添加股票失败', 'error');
+            }
+        }
+
+        // 新增：清理代码前缀
+        function cleanCodePrefix(code) {
+            // 移除常见的市场前缀
+            code = code.replace(/^(sh|sz|hk|SH|SZ|HK)/i, '');
+            return code;
+        }
+
+        // 新增：根据代码判断类型
+        function determineType(code) {
+            // 先清理前缀
+            const cleanCode = cleanCodePrefix(code);
+            
+            if (cleanCode === '000001' || cleanCode === '399001') return 'index';
+            if (cleanCode.length === 6 && /^\d+$/.test(cleanCode)) {
+                if (cleanCode.startsWith('6')) return 'sh_stock';
+                return 'sz_stock';
+            }
+            if (cleanCode.length === 5 && /^\d+$/.test(cleanCode)) return 'hk_stock';
+            return 'stock';
+        }
+
+        async function deleteSymbol(symbol) {
+            showCustomConfirm(`确定要删除 ${symbol} 吗？`, async () => {
+                try {
+                    const response = await fetch('/api/stock/watchlist', {
+                        method: 'DELETE',
+                        headers: { 'Content-Type': 'application/json' },
+                        body: JSON.stringify({ code: symbol })
+                    });
+                    const result = await response.json();
+                    if (response.ok) {
+                        // 优化：直接从本地关注列表中移除，而不是重新获取整个列表
+                        watchlist = watchlist.filter(item => item.symbol !== symbol);
+                        // 从DOM中移除对应的表格行
+                        const row = document.getElementById(`row-${symbol}`);
+                        if (row) {
+                            row.remove();
+                        }
+                        showToast(`成功删除 ${symbol}`, 'success');
+                        // 不再立即刷新所有数据，让定期刷新机制处理
+                    } else {
+                        showToast(result.error, 'error');
+                    }
+                } catch (error) {
+                    console.error('删除股票失败:', error);
+                    showToast('删除股票失败', 'error');
+                }
+            });
+        }
+
+        function toggleRefresh() {
+            if (isRefreshing) {
+                isRefreshing = false;
+                clearInterval(refreshInterval);
+                updateFooterStatus('刷新已暂停', 'paused');
+                showToast('刷新已暂停', 'warning');
+            } else {
+                isRefreshing = true;
+                startRefresh();
+                updateFooterStatus('刷新已恢复', 'refreshing');
+                showToast('刷新已恢复', 'success');
+            }
+        }
+
+        function manualRefresh() {
+            showToast('正在手动刷新...', 'info');
+            fetchPrices(true);
+        }
+
+        function openSettings() {
+            const modal = document.getElementById('settingsModal');
+            const input = document.getElementById('refreshIntervalInput');
+            input.value = refreshTime / 1000;
+            modal.style.display = 'flex';
+        }
+
+        function closeSettings() {
+            const modal = document.getElementById('settingsModal');
+            modal.style.display = 'none';
+        }
+
+        async function saveSettings() {
+            const input = document.getElementById('refreshIntervalInput');
+            const newInterval = parseInt(input.value);
+            if (newInterval < 1 || newInterval > 60) {
+                showToast('刷新间隔必须在1到60秒之间', 'error');
+                return;
+            }
+            try {
+                const response = await fetch('/api/stock/settings', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ stock_refresh_interval: newInterval })
+                });
+                const result = await response.json();
+                if (response.ok) {
+                    refreshTime = newInterval * 1000;
+                    showToast(`刷新间隔已设置为 ${newInterval} 秒`, 'success');
+                    if (isRefreshing) startRefresh();
+                    closeSettings();
+                } else {
+                    showToast(result.error, 'error');
+                }
+            } catch (error) {
+                console.error('保存设置失败:', error);
+                showToast('保存设置失败', 'error');
+            }
+        }
+
+        function startRefresh() {
+            if (refreshInterval) clearInterval(refreshInterval);
+
+            // 只有在页面可见时才启动定时器
+            if (isPageVisible) {
+                checkAndFetch();
+                refreshInterval = setInterval(checkAndFetch, refreshTime);
+            }
+        }
+
+        function checkAndFetch() {
+            // 检查是否应该获取数据：用户未暂停刷新 且 页面可见 且 在交易时间内
+            if (!isRefreshing) {
+                updateFooterStatus('用户已暂停刷新', 'paused');
+                return;
+            }
+            if (!isPageVisible) {
+                // 页面不可见时，不获取数据
+                return;
+            }
+            if (!isTradingTime()) {
+                const now = new Date();
+                const timeStr = now.toLocaleTimeString('zh-CN', { hour: '2-digit', minute: '2-digit' });
+                updateFooterStatus(`非交易时间 (当前: ${timeStr})`, 'closed');
+                return;
+            }
+            fetchPrices();
+        }
+
+        // 数据缓存
+        let cachedData = {
+            index_data: [],
+            stock_data: []
+        };
+        let lastSuccessfulUpdate = null;
+
+        async function fetchPrices(isManual = false) {
+            try {
+                // 显示加载状态
+                updateFooterStatus('正在获取数据...', 'refreshing');
+
+                const response = await fetch('/api/stock/batch_data');
+
+                if (response.ok) {
+                    const data = await response.json();
+
+                    // 更新缓存
+                    cachedData = {
+                        index_data: data.index_data || [],
+                        stock_data: data.stock_data || []
+                    };
+                    lastSuccessfulUpdate = new Date();
+
+                    // 更新指数数据
+                    updateIndex(cachedData.index_data);
+
+                    // 更新股票数据
+                    cachedData.stock_data.forEach(priceData => updateRow(priceData));
+
+                    lastRefreshTime = new Date();
+                    const statusText = isManual ? '手动刷新成功' : '刷新成功';
+                    updateFooterStatus(`${statusText} | 上次刷新: ${lastRefreshTime.toLocaleTimeString()}`, 'refreshing');
+                } else {
+                    // 如果批量请求失败，尝试使用缓存数据
+                    console.warn('批量请求失败，尝试显示缓存数据');
+                    if (cachedData.index_data.length > 0 || cachedData.stock_data.length > 0) {
+                        updateIndex(cachedData.index_data);
+                        cachedData.stock_data.forEach(priceData => updateRow(priceData));
+                        updateFooterStatus('使用缓存数据，最新数据获取失败', 'warning');
+                    } else {
+                        updateFooterStatus('获取数据失败', 'error');
+                    }
+                }
+            } catch (error) {
+                console.error('获取价格失败:', error);
+                // 出错时也尝试使用缓存数据
+                if (cachedData.index_data.length > 0 || cachedData.stock_data.length > 0) {
+                    updateIndex(cachedData.index_data);
+                    cachedData.stock_data.forEach(priceData => updateRow(priceData));
+                    updateFooterStatus(`获取最新数据失败，显示缓存数据 (${lastSuccessfulUpdate ? lastSuccessfulUpdate.toLocaleTimeString() : '未知时间'})`, 'warning');
+                } else {
+                    updateFooterStatus(`获取价格失败: ${error.message}`, 'error');
+                }
+                showToast('获取价格失败', 'error');
+            }
+        }
+
+        function updateIndex(indexData) {
+            if (!Array.isArray(indexData)) return;
+
+            const container = document.getElementById('indexContainer');
+            if (!container) return;
+
+            // 清空现有内容
+            container.innerHTML = '';
+
+            // 为每个指数数据创建卡片
+            indexData.forEach(data => {
+                if (!data || !data.symbol) return;
+
+                // 创建卡片元素
+                const cardId = `index-${data.symbol}`;
+                const card = document.createElement('div');
+                card.className = 'index-card';
+                card.id = cardId;
+
+                // 获取指数名称（如果可用）
+                const indexName = data.name || data.symbol;
+
+                card.innerHTML = `
+                    <h4>${indexName} (${data.symbol})</h4>
+                    <div class="index-value">${data.price ? data.price.toFixed(2) : '--'}</div>
+                    <div class="index-change">${formatChangeDisplay(data)}</div>
+                `;
+
+                container.appendChild(card);
+
+                // 添加样式类
+                updateIndexCardStyling(card, data);
+            });
+        }
+
+        function formatChangeDisplay(data) {
+            if (data.change === undefined || data.change_percent === undefined) {
+                return '--';
+            }
+            const changeText = data.change > 0 ?
+                `+${data.change.toFixed(2)} (+${data.change_percent.toFixed(2)}%)` :
+                `${data.change.toFixed(2)} (${data.change_percent.toFixed(2)}%)`;
+            return changeText;
+        }
+
+        function updateIndexCardStyling(card, data) {
+            if (!card || !data) return;
+
+            // 更新变化显示的样式
+            const changeElement = card.querySelector('.index-change');
+            if (changeElement) {
+                changeElement.className = 'index-change';
+                if (data.change_percent > 0) {
+                    changeElement.classList.add('positive');
+                } else if (data.change_percent < 0) {
+                    changeElement.classList.add('negative');
+                } else {
+                    changeElement.classList.add('neutral');
+                }
+            }
+        }
+
+        function updateIndexCard(elementId, data) {
+            const card = document.getElementById(elementId);
+            if (!card) return;
+            card.querySelector('.index-value').textContent = data.price.toFixed(2);
+            const changeText = data.change > 0 ? `+${data.change.toFixed(2)} (${data.change_percent.toFixed(2)}%)` : `${data.change.toFixed(2)} (${data.change_percent.toFixed(2)}%)`;
+            card.querySelector('.index-change').textContent = changeText;
+            card.classList.remove('positive', 'negative', 'neutral');
+            if (data.change_percent > 0) card.classList.add('positive');
+            else if (data.change_percent < 0) card.classList.add('negative');
+            else card.classList.add('neutral');
+        }
+
+        function createRow(item) {
+            const tbody = document.getElementById('stockTableBody');
+            if (!tbody) return; // 防止报错
+            
+            // 兼容新旧格式
+            const symbol = typeof item === 'string' ? item : item.symbol;
+            const name = typeof item === 'string' ? item : item.name;
+            
+            const row = document.createElement('tr');
+            row.id = `row-${symbol}`;
+            row.innerHTML = `
+                <td>${symbol}</td>
+                <td id="name-${symbol}">${name}</td>
+                <td id="type-${symbol}">--</td>
+                <td id="currency-${symbol}">--</td>
+                <td id="price-${symbol}">--</td>
+                <td id="change-${symbol}">--</td>
+                <td id="change_percent-${symbol}">--</td>
+                <td id="open_price-${symbol}">--</td>
+                <td id="high_price-${symbol}">--</td>
+                <td id="low_price-${symbol}">--</td>
+                <td><button class="delete" onclick="deleteSymbol('${symbol}')">删除</button></td>
+            `;
+            tbody.appendChild(row);
+        }
+
+        function updateTable() {
+            const tbody = document.getElementById('stockTableBody');
+            if (!tbody) return;
+            tbody.innerHTML = '';
+            watchlist.forEach(item => createRow(item));
+        }
+
+        function updateRow(priceData) {
+            const symbol = priceData.symbol;
+            const row = document.getElementById(`row-${symbol}`);
+            if (!row) return;
+            
+            const nameCell = document.getElementById(`name-${symbol}`);
+            if (nameCell) nameCell.textContent = priceData.name || '--';
+            
+            const typeCell = document.getElementById(`type-${symbol}`);
+            if (typeCell) {
+                if (priceData.type) {
+                    const typeText = getTypeText(priceData.type);
+                    typeCell.innerHTML = `<span class="type-badge type-${priceData.type}">${typeText}</span>`;
+                } else {
+                    typeCell.textContent = '--';
+                }
+            }
+            
+            const currencyCell = document.getElementById(`currency-${symbol}`);
+            if (currencyCell) {
+                if (priceData.currency) {
+                    currencyCell.innerHTML = `<span class="currency-badge">${priceData.currency}</span>`;
+                } else {
+                    currencyCell.textContent = '--';
+                }
+            }
+            
+            const priceCell = document.getElementById(`price-${symbol}`);
+            if (priceCell) priceCell.textContent = priceData.price !== null && priceData.price !== undefined ? priceData.price.toFixed(2) : '--';
+            
+            const changeCell = document.getElementById(`change-${symbol}`);
+            if (changeCell) {
+                if (priceData.change !== null && priceData.change !== undefined) {
+                    changeCell.textContent = priceData.change.toFixed(2);
+                    changeCell.className = priceData.change > 0 ? 'positive' : (priceData.change < 0 ? 'negative' : 'neutral');
+                } else {
+                    changeCell.textContent = '--';
+                    changeCell.className = '';
+                }
+            }
+            
+            const changePercentCell = document.getElementById(`change_percent-${symbol}`);
+            if (changePercentCell) {
+                if (priceData.change_percent !== null && priceData.change_percent !== undefined) {
+                    changePercentCell.textContent = priceData.change_percent.toFixed(2) + '%';
+                    changePercentCell.className = priceData.change_percent > 0 ? 'positive' : (priceData.change_percent < 0 ? 'negative' : 'neutral');
+                } else {
+                    changePercentCell.textContent = '--';
+                    changePercentCell.className = '';
+                }
+            }
+            
+            const openPriceCell = document.getElementById(`open_price-${symbol}`);
+            if (openPriceCell) openPriceCell.textContent = priceData.open_price !== null && priceData.open_price !== undefined ? priceData.open_price.toFixed(2) : '--';
+            
+            const highPriceCell = document.getElementById(`high_price-${symbol}`);
+            if (highPriceCell) highPriceCell.textContent = priceData.high_price !== null && priceData.high_price !== undefined ? priceData.high_price.toFixed(2) : '--';
+            
+            const lowPriceCell = document.getElementById(`low_price-${symbol}`);
+            if (lowPriceCell) lowPriceCell.textContent = priceData.low_price !== null && priceData.low_price !== undefined ? priceData.low_price.toFixed(2) : '--';
+        }
+
+        // 新增：根据雪球返回的type显示类型文本
+        function getTypeText(type) {
+            // 处理后端返回的字符串类型标识
+            const typeMap = {
+                'sh_stock': 'SH',
+                'sz_stock': 'SZ',
+                'hk_stock': 'HK',
+                'us_stock': 'US',
+                'index': '指数',
+                11: 'A股',
+                12: 'B股',
+                13: '港股',
+                14: '可转债',
+                15: '基金',
+                16: '美股',
+                20: '指数'
+            };
+            return typeMap[type] || type || '--';
+        }
+
+        function updateFooterStatus(message, type) {
+            const footerStatusDiv = document.getElementById('footerStatus');
+            if (!footerStatusDiv) return;
+            footerStatusDiv.textContent = message;
+            footerStatusDiv.className = `footer-status ${type}`;
+        }
+
+        function showToast(message, type = 'info') {
+            console.log(`[${type}] ${message}`);
+            if (window.parent && window.parent.showToast) {
+                try {
+                    window.parent.showToast(message, type);
+                    return;
+                } catch (e) {}
+            }
+            // 本地回退
+            const containerId = 'localToastContainer';
+            let container = document.getElementById(containerId);
+            if (!container) {
+                container = document.createElement('div');
+                container.id = containerId;
+                container.style.cssText = `position: fixed; bottom: 20px; left: 50%; transform: translateX(-50%); z-index: 3000; display: flex; flex-direction: column; gap: 10px; width: 90%; max-width: 400px; pointer-events: none;`;
+                document.body.appendChild(container);
+            }
+            const toast = document.createElement('div');
+            let bgColor = '#3498db';
+            if (type === 'success') bgColor = '#27ae60';
+            if (type === 'error') bgColor = '#e74c3c';
+            if (type === 'warning') bgColor = '#f39c12';
+            toast.style.cssText = `padding: 12px 20px; border-radius: 8px; color: white; font-weight: bold; box-shadow: 0 2px 8px rgba(0,0,0,0.2); text-align: center; background-color: ${bgColor}; pointer-events: auto; box-sizing: border-box; animation: slideIn 0.3s ease-out, fadeOut 0.3s ease-in 2.7s forwards;`;
+            toast.textContent = message;
+            container.appendChild(toast);
+            setTimeout(() => { if (toast.parentNode) toast.parentNode.removeChild(toast); }, 3000);
+        }
+
+        // 批量获取股票数据
+        async function fetchBatchStockData(codes) {
+            if (!codes || codes.length === 0) return [];
+
+            try {
+                // 构建请求URL
+                const symbols = codes.join(',');
+                const url = `/api/stock/prices_batch?symbols=${encodeURIComponent(symbols)}`;
+
+                const response = await fetch(url);
+                if (!response.ok) throw new Error(`HTTP ${response.status}`);
+
+                const data = await response.json();
+                return Array.isArray(data) ? data : [];
+            } catch (error) {
+                console.error('批量获取股票数据失败:', error);
+                // 如果批量获取失败，尝试逐个获取
+                const results = [];
+                for (const code of codes) {
+                    try {
+                        const response = await fetch(`/api/stock/detail/${encodeURIComponent(code)}`);
+                        if (response.ok) {
+                            const data = await response.json();
+                            if (data.realtime_data) {
+                                results.push(data.realtime_data);
+                            }
+                        }
+                    } catch (err) {
+                        console.error(`获取股票 ${code} 数据失败:`, err);
+                    }
+                }
+                return results;
+            }
+        }
+
+        // 指数配置模态框
+        function openIndexConfig() {
+            // 获取当前配置并显示模态框
+            fetch('/api/stock/index_config')
+                .then(response => response.json())
+                .then(config => {
+                    const indices = config.enabled_indices || [
+                        {code: '000001', name: '上证指数'},
+                        {code: '399001', name: '深证成指'},
+                        {code: '399006', name: '创业板指'}
+                    ];
+
+                    // 创建模态框HTML
+                    let modalHtml = `
+                        <div id="indexConfigModal" class="modal">
+                            <div class="modal-content" style="width: 600px; max-width: 90%;">
+                                <h3>指数显示配置</h3>
+                                <div style="max-height: 400px; overflow-y: auto;">
+                                    <table style="width: 100%; border-collapse: collapse;">
+                                        <thead>
+                                            <tr>
+                                                <th style="text-align: left; padding: 8px; border-bottom: 1px solid #ddd;">选择</th>
+                                                <th style="text-align: left; padding: 8px; border-bottom: 1px solid #ddd;">代码</th>
+                                                <th style="text-align: left; padding: 8px; border-bottom: 1px solid #ddd;">名称</th>
+                                            </tr>
+                                        </thead>
+                                        <tbody id="indicesList">
+                    `;
+
+                    // 预设的指数列表
+                    const presetIndices = [
+                        {code: 'SH000001', name: '上证指数'},
+                        {code: 'SZ399001', name: '深证成指'},
+                        {code: 'SZ399006', name: '创业板指'},
+                        {code: 'SH000300', name: '沪深300指数'},
+                        {code: 'SH000016', name: '上证50指数'},
+                        {code: 'SZ399905', name: '中证500'},
+                        {code: 'SZ399005', name: '中小板指'},
+                        {code: 'HKHSI', name: '恒生指数'},
+                        {code: 'HKHSCEI', name: '国企指数'},
+                        {code: 'HKHSTECH', name: '恒生科技指数'},
+                        {code: '.IXIC', name: '纳斯达克综合指数'},
+                        {code: '.DJI', name: '道琼斯指数'},
+                        {code: '.INX', name: '标普500'}
+                    ];
+
+                    presetIndices.forEach(idx => {
+                        const isChecked = indices.some(selected => selected.code === idx.code) ? 'checked' : '';
+                        modalHtml += `
+                            <tr>
+                                <td style="padding: 8px; border-bottom: 1px solid #eee;">
+                                    <input type="checkbox" class="index-checkbox" value="${idx.code}" data-name="${idx.name}" ${isChecked}>
+                                </td>
+                                <td style="padding: 8px; border-bottom: 1px solid #eee;">${idx.code}</td>
+                                <td style="padding: 8px; border-bottom: 1px solid #eee;">${idx.name}</td>
+                            </tr>
+                        `;
+                    });
+
+                    modalHtml += `
+                                        </tbody>
+                                    </table>
+                                </div>
+                                <div class="modal-buttons" style="margin-top: 20px; display: flex; justify-content: flex-end; gap: 10px;">
+                                    <button class="modal-btn cancel" onclick="closeIndexConfig()">取消</button>
+                                    <button class="modal-btn save" onclick="saveIndexConfig()">保存</button>
+                                </div>
+                            </div>
+                        </div>
+                    `;
+
+                    // 添加模态框到页面
+                    document.body.insertAdjacentHTML('beforeend', modalHtml);
+
+                    // 显示模态框
+                    document.getElementById('indexConfigModal').style.display = 'flex';
+                })
+                .catch(error => {
+                    console.error('获取指数配置失败:', error);
+                    showToast('获取指数配置失败', 'error');
+                });
+        }
+
+        function closeIndexConfig() {
+            const modal = document.getElementById('indexConfigModal');
+            if (modal) {
+                modal.remove();
+            }
+        }
+
+        function saveIndexConfig() {
+            // 获取选中的指数
+            const checkboxes = document.querySelectorAll('.index-checkbox:checked');
+            const enabledIndices = Array.from(checkboxes).map(cb => ({
+                code: cb.value,
+                name: cb.getAttribute('data-name')
+            }));
+
+            // 发送配置到后端
+            fetch('/api/stock/index_config', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ enabled_indices: enabledIndices })
+            })
+            .then(response => response.json())
+            .then(result => {
+                if (result.success) {
+                    showToast('指数配置保存成功，正在更新显示...', 'success');
+                    closeIndexConfig();
+                    // 重新加载指数数据
+                    loadIndexData();
+                } else {
+                    showToast(result.error || '保存失败', 'error');
+                }
+            })
+            .catch(error => {
+                console.error('保存指数配置失败:', error);
+                showToast('保存指数配置失败', 'error');
+            });
+        }
+
+        // 加载指数数据
+        function loadIndexData() {
+            fetch('/api/stock/index_prices')
+                .then(response => response.json())
+                .then(indexData => {
+                    updateIndex(indexData);
+                    // 根据返回的数据数量提供反馈
+                    if (Array.isArray(indexData) && indexData.length > 0) {
+                        showToast(`成功加载 ${indexData.length} 个指数`, 'success');
+                    } else {
+                        showToast('没有获取到指数数据，请检查配置', 'warning');
+                    }
+                })
+                .catch(error => {
+                    console.error('获取指数数据失败:', error);
+                    showToast('获取指数数据失败', 'error');
+                });
+        }
+
+        // 页面可见性控制变量
+        let isPageVisible = true;
+        let refreshWasActive = false;
+
+        // 页面可见性变化处理
+        function handleVisibilityChange() {
+            isPageVisible = !document.hidden;
+
+            if (isPageVisible) {
+                // 页面变为可见时，如果之前刷新是激活的，则恢复刷新
+                if (refreshWasActive && isRefreshing) {
+                    startRefresh();
+                    showToast('页面恢复可见，数据刷新已恢复', 'info');
+                }
+            } else {
+                // 页面变为不可见时，暂停刷新
+                if (isRefreshing) {
+                    refreshWasActive = true;
+                    if (refreshInterval) {
+                        clearInterval(refreshInterval);
+                        refreshInterval = null;
+                        updateFooterStatus('页面不可见，数据刷新已暂停', 'paused');
+                    }
+                } else {
+                    refreshWasActive = false;
+                }
+            }
+        }
+
+        // 自定义确认对话框
+        function showCustomConfirm(message, onConfirm, onCancel) {
+            // 创建遮罩层
+            const overlay = document.createElement('div');
+            overlay.className = 'confirm-modal';
+            overlay.id = 'customConfirmOverlay';
+
+            // 创建对话框内容
+            overlay.innerHTML = `
+                <div class="confirm-modal-content">
+                    <div class="confirm-message">${message}</div>
+                    <div class="confirm-buttons">
+                        <button class="confirm-btn confirm" onclick="handleConfirmAction(true)">确定</button>
+                        <button class="confirm-btn cancel" onclick="handleConfirmAction(false)">取消</button>
+                    </div>
+                </div>
+            `;
+
+            // 添加到页面
+            document.body.appendChild(overlay);
+
+            // 显示对话框
+            overlay.style.display = 'flex';
+
+            // 保存回调函数
+            window.currentConfirmCallback = {
+                onConfirm: onConfirm,
+                onCancel: onCancel || (() => {})
+            };
+        }
+
+        // 处理确认操作
+        function handleConfirmAction(confirmed) {
+            const overlay = document.getElementById('customConfirmOverlay');
+            if (overlay) {
+                overlay.remove();
+            }
+
+            if (window.currentConfirmCallback) {
+                if (confirmed && window.currentConfirmCallback.onConfirm) {
+                    window.currentConfirmCallback.onConfirm();
+                } else if (!confirmed && window.currentConfirmCallback.onCancel) {
+                    window.currentConfirmCallback.onCancel();
+                }
+                // 清除回调
+                delete window.currentConfirmCallback;
+            }
+        }
+
+        // 页面加载完成后执行初始化
+        document.addEventListener('DOMContentLoaded', function() {
+            // 添加页面可见性监听器
+            document.addEventListener('visibilitychange', handleVisibilityChange);
+
+            window.initPage();
+        });
+    </script>
+</body>
+</html>

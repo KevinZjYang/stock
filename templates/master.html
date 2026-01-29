@@ -1,0 +1,641 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>股票基金监控系统 - Master-Detail</title>
+    <style>
+        * { margin: 0; padding: 0; box-sizing: border-box; }
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
+            background: #f0f2f5;
+            height: 100vh;
+            overflow: hidden;
+            display: flex;
+            flex-direction: column;
+        }
+        
+        /* 顶部状态栏 */
+        .global-status-bar {
+            background: linear-gradient(135deg, #2c3e50 0%, #34495e 100%);
+            color: white;
+            padding: 8px 20px;
+            font-size: 13px;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            flex-shrink: 0;
+            box-shadow: 0 2px 5px rgba(0,0,0,0.1);
+            gap: 15px;
+            flex-wrap: wrap;
+            z-index: 100; /* 确保在最上层 */
+        }
+        
+        .status-group { display: flex; align-items: center; gap: 15px; }
+        .status-item { display: flex; align-items: center; gap: 8px; }
+        
+        .status-indicator {
+            width: 8px; height: 8px; border-radius: 50%;
+            background-color: #27ae60; animation: pulse 2s infinite;
+        }
+        .status-indicator.error { background-color: #e74c3c; }
+        .status-indicator.paused { background-color: #f39c12; }
+        
+        @keyframes pulse { 0% { opacity: 1; } 50% { opacity: 0.5; } 100% { opacity: 1; } }
+        
+        /* 全局控制按钮 */
+        .global-controls { display: flex; gap: 8px; }
+        .global-btn {
+            padding: 6px 12px; border: none; border-radius: 4px; cursor: pointer;
+            font-size: 12px; font-weight: 600; transition: all 0.2s; color: white;
+            background: rgba(255,255,255,0.2); border: 1px solid rgba(255,255,255,0.3);
+        }
+        .global-btn:hover { background: rgba(255,255,255,0.3); }
+        .global-btn.active { background: #e74c3c; border-color: #e74c3c; }
+        .global-btn.refresh { background: #3498db; border-color: #3498db; }
+
+        /* 新增：日志按钮样式 */
+        .log-btn {
+            background: #f39c12;
+            border: 1px solid #f39c12;
+            color: white;
+            padding: 6px 12px;
+            border-radius: 4px;
+            cursor: pointer;
+            font-size: 12px;
+            font-weight: 600;
+            transition: all 0.2s;
+        }
+        .log-btn:hover {
+            background: #e67e22;
+            border-color: #e67e22;
+        }
+
+        /* 主容器：Master-Detail 布局 */
+        .master-detail-container { display: flex; flex: 1; overflow: hidden; }
+        
+        /* 左侧：Master (导航) */
+        .master-panel {
+            width: 250px; background: white; border-right: 1px solid #e0e0e0;
+            display: flex; flex-direction: column; flex-shrink: 0;
+            transition: width 0.3s ease;
+        }
+        .master-header { padding: 20px; border-bottom: 1px solid #e0e0e0; background: #fafafa; }
+        .master-header h1 { font-size: 18px; color: #2c3e50; margin-bottom: 5px; }
+        .master-header p { font-size: 12px; color: #7f8c8d; }
+        
+        .nav-list { list-style: none; padding: 10px 0; flex: 1; overflow-y: auto; }
+        .nav-item {
+            padding: 15px 20px; cursor: pointer; transition: all 0.2s;
+            display: flex; align-items: center; gap: 12px; border-left: 4px solid transparent; color: #555;
+        }
+        .nav-item:hover { background-color: #f8f9fa; color: #3498db; }
+        .nav-item.active { background-color: #e3f2fd; color: #1565c0; border-left-color: #1565c0; font-weight: 600; }
+        .nav-icon { font-size: 18px; width: 20px; text-align: center; }
+
+        /* 右侧：Detail (内容区域) */
+        .detail-panel { flex: 1; background: #f8f9fa; display: flex; flex-direction: column; overflow: hidden; position: relative; }
+        .detail-header { background: white; padding: 15px 20px; border-bottom: 1px solid #e0e0e0; display: flex; justify-content: space-between; align-items: center; flex-shrink: 0; }
+        .detail-title { font-size: 16px; font-weight: 600; color: #2c3e50; }
+        .detail-content { flex: 1; overflow: hidden; background: white; position: relative; }
+
+        /* Iframe 容器 */
+        .iframe-wrapper { width: 100%; height: 100%; display: none; opacity: 0; transition: opacity 0.3s ease; }
+        .iframe-wrapper.active { display: block; opacity: 1; }
+        .iframe-wrapper iframe { width: 100%; height: 100%; border: none; background: white; }
+
+        /* 移动端适配 */
+        @media (max-width: 768px) {
+            .master-detail-container { flex-direction: column; }
+            .master-panel { width: 100%; height: auto; max-height: 200px; border-right: none; border-bottom: 1px solid #e0e0e0; }
+            .nav-list { display: flex; overflow-x: auto; padding: 5px; }
+            .nav-item { flex-shrink: 0; padding: 10px 15px; border-left: none; border-bottom: 3px solid transparent; }
+            .nav-item.active { border-left-color: transparent; border-bottom-color: #1565c0; }
+            .master-header { display: none; }
+            .global-status-bar { padding: 5px 10px; font-size: 11px; }
+            .global-btn { padding: 4px 8px; font-size: 11px; }
+        }
+
+        /* 加载动画 */
+        .loading-overlay {
+            position: absolute; top: 0; left: 0; right: 0; bottom: 0;
+            background: rgba(255,255,255,0.8); display: flex; justify-content: center; align-items: center;
+            z-index: 10; display: none;
+        }
+        .loading-spinner {
+            width: 40px; height: 40px; border: 4px solid #f3f3f3; border-top: 4px solid #3498db;
+            border-radius: 50%; animation: spin 1s linear infinite;
+        }
+        @keyframes spin { 0% { transform: rotate(0deg); } 100% { transform: rotate(360deg); } }
+
+        /* --- 新增：日志模态框样式 --- */
+        #logModal {
+            display: none; 
+            position: fixed; 
+            top: 0; left: 0; 
+            width: 100%; height: 100%; 
+            background: rgba(0,0,0,0.5); 
+            z-index: 2000; /* 确保在最上层 */
+            justify-content: center; 
+            align-items: center;
+        }
+        #logModal .modal-content {
+            background: white; 
+            padding: 20px; 
+            border-radius: 8px; 
+            width: 90%; 
+            max-width: 900px; 
+            max-height: 90vh; 
+            display: flex; 
+            flex-direction: column;
+            box-shadow: 0 10px 25px rgba(0,0,0,0.2);
+        }
+        #logModal .modal-header {
+            display: flex; 
+            justify-content: space-between; 
+            align-items: center; 
+            margin-bottom: 15px;
+            border-bottom: 1px solid #eee;
+            padding-bottom: 10px;
+        }
+        #logModal .modal-header h3 { margin: 0; font-size: 18px; color: #2c3e50; }
+        
+        /* --- 修复：模态框内的按钮样式 --- */
+        #logModal .modal-header button {
+            background: #3498db; /* 蓝色背景 */
+            color: white; /* 白色文字 */
+            border: 1px solid #2980b9; /* 深蓝色边框 */
+            padding: 6px 12px;
+            border-radius: 4px;
+            cursor: pointer;
+            font-size: 12px;
+            font-weight: 600;
+            transition: all 0.2s;
+        }
+        #logModal .modal-header button:hover {
+            background: #2980b9; /* 悬停时变深 */
+        }
+        /* 危险操作按钮（清空日志） */
+        #logModal .modal-header button.danger {
+            background: #e74c3c; /* 红色背景 */
+            border-color: #c0392b; /* 深红色边框 */
+        }
+        #logModal .modal-header button.danger:hover {
+            background: #c0392b; /* 悬停时变深 */
+        }
+
+        #logModal .modal-body {
+            flex: 1; 
+            overflow-y: auto; 
+            background: #f8f9fa; 
+            padding: 10px; 
+            border: 1px solid #e0e0e0; 
+            font-family: monospace; 
+            font-size: 12px; 
+            line-height: 1.5;
+            border-radius: 4px;
+        }
+        
+        /* --- 修改：日志条目样式 --- */
+        #logModal .log-entry {
+            margin-bottom: 2px; 
+            padding: 2px 4px; 
+            border-radius: 3px;
+            white-space: nowrap; /* 强制单行 */
+            overflow: hidden; /* 隐藏超出部分 */
+            text-overflow: ellipsis; /* 超出部分显示省略号 */
+            user-select: text; /* 允许选中复制 */
+            cursor: pointer; /* 鼠标变为手型，提示可点击 */
+            transition: background-color 0.2s;
+        }
+        #logModal .log-entry:hover {
+            background-color: #e8e8e8; /* 悬停时高亮 */
+        }
+        /* 点击复制后的反馈样式 */
+        #logModal .log-entry.copied {
+            background-color: #d4edda; /* 浅绿色背景 */
+            color: #155724; /* 深绿色文字 */
+        }
+        
+        #logModal .log-timestamp { color: #666; min-width: 85px; display: inline-block; }
+        #logModal .log-page { color: #3498db; font-weight: bold; min-width: 60px; display: inline-block; }
+        #logModal .log-function { color: #9b59b6; min-width: 50px; display: inline-block; }
+        #logModal .log-level { font-weight: bold; min-width: 45px; display: inline-block; }
+        #logModal .log-message { color: #333; }
+        
+        /* 日志级别颜色 */
+        .log-level-ERROR { color: #e74c3c !important; }
+        .log-level-WARNING { color: #f39c12 !important; }
+        .log-level-INFO { color: #27ae60 !important; }
+        .log-level-DEBUG { color: #7f8c8d !important; }
+
+        /* 自定义确认对话框 */
+        .confirm-modal {
+            display: none;
+            position: fixed;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            background: rgba(0,0,0,0.5);
+            z-index: 2000;
+            justify-content: center;
+            align-items: center;
+        }
+
+        .confirm-modal-content {
+            background: white;
+            padding: 25px;
+            border-radius: 8px;
+            width: 90%;
+            max-width: 400px;
+            text-align: center;
+            box-shadow: 0 4px 20px rgba(0,0,0,0.3);
+        }
+
+        .confirm-message {
+            margin: 15px 0;
+            font-size: 16px;
+            color: #333;
+        }
+
+        .confirm-buttons {
+            display: flex;
+            justify-content: center;
+            gap: 15px;
+            margin-top: 20px;
+        }
+
+        .confirm-btn {
+            padding: 10px 20px;
+            border: none;
+            border-radius: 4px;
+            cursor: pointer;
+            font-weight: 600;
+            font-size: 14px;
+            transition: background 0.2s;
+        }
+
+        .confirm-btn.confirm {
+            background: #e74c3c;
+            color: white;
+        }
+
+        .confirm-btn.confirm:hover {
+            background: #c0392b;
+        }
+
+        .confirm-btn.cancel {
+            background: #95a5a6;
+            color: white;
+        }
+
+        .confirm-btn.cancel:hover {
+            background: #7f8c8d;
+        }
+    </style>
+</head>
+<body>
+    <!-- 全局状态栏 -->
+    <div class="global-status-bar">
+        <div class="status-group">
+            <div class="status-item">
+                <div class="status-indicator" id="systemStatus"></div>
+                <span id="statusText">系统运行中</span>
+            </div>
+            <div class="status-item">
+                <span id="currentTime"></span>
+            </div>
+        </div>
+        
+        <div class="global-controls">
+            <button class="global-btn refresh" onclick="globalManualRefresh()">手动刷新</button>
+            <button class="global-btn" id="pauseBtn" onclick="toggleGlobalRefresh()">暂停刷新</button>
+            <!-- 新增：日志按钮 -->
+            <button class="log-btn" onclick="openLogModal()">系统日志</button>
+        </div>
+    </div>
+
+    <!-- Master-Detail 主容器 -->
+    <div class="master-detail-container">
+        <!-- Master: 导航面板 -->
+        <div class="master-panel">
+            <div class="master-header">
+                <h1>监控中心</h1>
+                <p>股票基金实时监控</p>
+            </div>
+            <ul class="nav-list">
+                <li class="nav-item active" onclick="switchView('stock')">
+                    <span class="nav-icon">📈</span>
+                    <span>股票监控</span>
+                </li>
+                <li class="nav-item" onclick="switchView('fund')">
+                    <span class="nav-icon">💰</span>
+                    <span>基金查询</span>
+                </li>
+                <!-- 新增：基金交易管理入口 -->
+                <li class="nav-item" onclick="switchView('fund_trans')">
+                    <span class="nav-icon">📊</span>
+                    <span>基金交易管理</span>
+                </li>
+            </ul>
+        </div>
+
+        <!-- Detail: 内容区域 -->
+        <div class="detail-panel">
+            <div class="detail-header">
+                <div class="detail-title" id="viewTitle">股票监控</div>
+            </div>
+            
+            <div class="detail-content">
+                <!-- 加载遮罩 -->
+                <div class="loading-overlay" id="loadingOverlay">
+                    <div class="loading-spinner"></div>
+                </div>
+
+                <!-- 股票页面 Iframe -->
+                <div id="stockWrapper" class="iframe-wrapper active">
+                    <iframe src="/stock_page" title="股票监控" onload="hideLoading()"></iframe>
+                </div>
+                
+                <!-- 基金页面 Iframe -->
+                <div id="fundWrapper" class="iframe-wrapper">
+                    <iframe src="/fund_page" title="基金查询" onload="hideLoading()"></iframe>
+                </div>
+
+                <!-- 基金交易管理页面 Iframe -->
+                <div id="fund_transWrapper" class="iframe-wrapper">
+                    <iframe src="/fund_trans_page" title="基金交易管理" onload="hideLoading()"></iframe>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- 新增：日志模态框 (放在 body 最底部) -->
+    <div id="logModal">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h3>系统日志 (自动刷新: 2秒)</h3>
+                <div>
+                    <button class="danger" onclick="clearLogs()">清空日志</button>
+                    <button onclick="closeLogModal()">关闭</button>
+                </div>
+            </div>
+            <div id="logContent" class="modal-body">
+                <!-- 日志内容将在这里显示 -->
+            </div>
+        </div>
+    </div>
+
+    <script>
+        let currentView = 'stock';
+        let isGlobalPaused = false;
+        let logRefreshInterval = null; // 新增：日志刷新定时器
+
+        document.addEventListener('DOMContentLoaded', function() {
+            updateTime();
+            setInterval(updateTime, 1000);
+        });
+
+        function switchView(view) {
+            if (currentView === view) return;
+            showLoading();
+            
+            document.querySelectorAll('.nav-item').forEach(item => item.classList.remove('active'));
+            const activeItem = document.querySelector(`.nav-item[onclick="switchView('${view}')"]`);
+            if (activeItem) activeItem.classList.add('active');
+            
+            const titleMap = { 
+                'stock': '股票监控', 
+                'fund': '基金查询',
+                'fund_trans': '基金交易管理'
+            };
+            document.getElementById('viewTitle').textContent = titleMap[view];
+            
+            document.querySelectorAll('.iframe-wrapper').forEach(wrapper => wrapper.classList.remove('active'));
+            
+            setTimeout(() => {
+                const targetWrapper = document.getElementById(view + 'Wrapper');
+                if (targetWrapper) {
+                    targetWrapper.classList.add('active');
+                }
+                currentView = view;
+                hideLoading();
+            }, 300);
+        }
+
+        function globalManualRefresh() {
+            showLoading();
+            const activeWrapper = document.querySelector('.iframe-wrapper.active iframe');
+            if (activeWrapper) {
+                activeWrapper.contentWindow.postMessage({ type: 'MANUAL_REFRESH' }, window.location.origin);
+            }
+            setTimeout(hideLoading, 500);
+        }
+
+        function toggleGlobalRefresh() {
+            isGlobalPaused = !isGlobalPaused;
+            const btn = document.getElementById('pauseBtn');
+            const statusIndicator = document.getElementById('systemStatus');
+            const statusText = document.getElementById('statusText');
+            
+            if (isGlobalPaused) {
+                btn.textContent = '恢复刷新';
+                btn.classList.add('active');
+                statusIndicator.className = 'status-indicator paused';
+                statusText.textContent = '全局暂停';
+                broadcastToIframes({ type: 'PAUSE_REFRESH' });
+            } else {
+                btn.textContent = '暂停刷新';
+                btn.classList.remove('active');
+                statusIndicator.className = 'status-indicator';
+                statusText.textContent = '系统运行中';
+                broadcastToIframes({ type: 'RESUME_REFRESH' });
+            }
+        }
+
+        function broadcastToIframes(message) {
+            const iframes = document.querySelectorAll('iframe');
+            iframes.forEach(iframe => {
+                try {
+                    iframe.contentWindow.postMessage(message, window.location.origin);
+                } catch (e) {
+                    console.warn('无法向 iframe 发送消息:', e);
+                }
+            });
+        }
+
+        function updateTime() {
+            const now = new Date();
+            const timeStr = now.toLocaleTimeString('zh-CN', { hour: '2-digit', minute: '2-digit', second: '2-digit' });
+            document.getElementById('currentTime').textContent = timeStr;
+        }
+
+        function showLoading() {
+            document.getElementById('loadingOverlay').style.display = 'flex';
+        }
+
+        function hideLoading() {
+            document.getElementById('loadingOverlay').style.display = 'none';
+        }
+
+        // --- 新增：日志相关功能 ---
+        
+        function openLogModal() {
+            const modal = document.getElementById('logModal');
+            modal.style.display = 'flex';
+            
+            // 立即获取一次日志
+            fetchLogs();
+            
+            // 启动定时器，每2秒刷新一次
+            logRefreshInterval = setInterval(fetchLogs, 2000);
+        }
+
+        function closeLogModal() {
+            const modal = document.getElementById('logModal');
+            modal.style.display = 'none';
+            
+            // 关闭时清除定时器，防止后台持续请求
+            if (logRefreshInterval) {
+                clearInterval(logRefreshInterval);
+                logRefreshInterval = null;
+            }
+        }
+
+        async function fetchLogs() {
+            const logContent = document.getElementById('logContent');
+            // 如果是第一次加载，显示加载中
+            if (!logContent.innerHTML.includes('log-entry')) {
+                logContent.innerHTML = '<div style="text-align: center; padding: 20px;">正在加载日志...</div>';
+            }
+            
+            try {
+                const response = await fetch('/api/log/list');
+                if (!response.ok) throw new Error('获取日志失败');
+                
+                const logs = await response.json();
+                
+                if (logs.length === 0) {
+                    logContent.innerHTML = '<div style="text-align: center; padding: 20px; color: #999;">暂无日志记录</div>';
+                    return;
+                }
+
+                // 格式化显示：时间-页面-函数-内容
+                let html = '';
+                // 正序显示，最新的在最上面 (logs 数组是按时间顺序的，最新的在最后)
+                // 所以我们从后往前遍历，但不反转数组，这样最新的在顶部
+                for (let i = logs.length - 1; i >= 0; i--) {
+                    const log = logs[i];
+                    // 将完整日志内容作为 title 属性，鼠标悬停时显示
+                    const fullLogText = `[${log.timestamp}] [${log.page}] [${log.function}] [${log.level}] ${log.message}`;
+                    html += `
+                        <div class="log-entry" title="${fullLogText}" onclick="copyLogToClipboard(this, '${fullLogText.replace(/'/g, "\\'")}')">
+                            <span class="log-timestamp">[${log.timestamp}]</span>
+                            <span class="log-page">[${log.page}]</span>
+                            <span class="log-function">[${log.function}]</span>
+                            <span class="log-level log-level-${log.level}">[${log.level}]</span>
+                            <span class="log-message">${log.message}</span>
+                        </div>
+                    `;
+                }
+                logContent.innerHTML = html;
+                
+            } catch (error) {
+                logContent.innerHTML = `<div style="color: red;">错误: ${error.message}</div>`;
+                // 如果出错，也停止刷新，避免死循环
+                if (logRefreshInterval) {
+                    clearInterval(logRefreshInterval);
+                    logRefreshInterval = null;
+                }
+            }
+        }
+
+        // --- 新增：复制日志到剪贴板 ---
+        function copyLogToClipboard(element, logText) {
+            // 使用 navigator.clipboard API 复制文本
+            navigator.clipboard.writeText(logText).then(() => {
+                // 复制成功，添加视觉反馈
+                element.classList.add('copied');
+                
+                // 显示 Toast 提示
+                showToast('已复制到剪贴板', 'success');
+                
+                // 1.5秒后移除高亮样式
+                setTimeout(() => {
+                    element.classList.remove('copied');
+                }, 1500);
+            }).catch(err => {
+                // 复制失败
+                console.error('复制失败:', err);
+                showToast('复制失败', 'error');
+            });
+        }
+
+        // 自定义确认对话框
+        function showCustomConfirm(message, onConfirm, onCancel) {
+            // 创建遮罩层
+            const overlay = document.createElement('div');
+            overlay.className = 'confirm-modal';
+            overlay.id = 'customConfirmOverlay';
+
+            // 创建对话框内容
+            overlay.innerHTML = `
+                <div class="confirm-modal-content">
+                    <div class="confirm-message">${message}</div>
+                    <div class="confirm-buttons">
+                        <button class="confirm-btn confirm" onclick="handleConfirmAction(true)">确定</button>
+                        <button class="confirm-btn cancel" onclick="handleConfirmAction(false)">取消</button>
+                    </div>
+                </div>
+            `;
+
+            // 添加到页面
+            document.body.appendChild(overlay);
+
+            // 显示对话框
+            overlay.style.display = 'flex';
+
+            // 保存回调函数
+            window.currentConfirmCallback = {
+                onConfirm: onConfirm,
+                onCancel: onCancel || (() => {})
+            };
+        }
+
+        // 处理确认操作
+        function handleConfirmAction(confirmed) {
+            const overlay = document.getElementById('customConfirmOverlay');
+            if (overlay) {
+                overlay.remove();
+            }
+
+            if (window.currentConfirmCallback) {
+                if (confirmed && window.currentConfirmCallback.onConfirm) {
+                    window.currentConfirmCallback.onConfirm();
+                } else if (!confirmed && window.currentConfirmCallback.onCancel) {
+                    window.currentConfirmCallback.onCancel();
+                }
+                // 清除回调
+                delete window.currentConfirmCallback;
+            }
+        }
+
+        async function clearLogs() {
+            showCustomConfirm('确定要清空所有日志吗？', async () => {
+                try {
+                    const response = await fetch('/api/log/clear', { method: 'POST' });
+                    if (response.ok) {
+                        fetchLogs(); // 刷新显示
+                        showToast('日志已清空', 'success');
+                    } else {
+                        showToast('清空日志失败', 'error');
+                    }
+                } catch (error) {
+                    showToast('网络错误: ' + error.message, 'error');
+                }
+            });
+        }
+    </script>
+</body>
+</html>
