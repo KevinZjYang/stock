@@ -3,8 +3,9 @@ from flask import Blueprint, request, jsonify, make_response
 from app import (
     load_stock_watchlist, add_stock_to_watchlist, remove_stock_from_watchlist,
     search_stock_by_code, get_stock_realtime_data, get_stock_realtime_data_batch,
-    app_logger, get_db_connection
+    app_logger, get_db_connection, set_setting
 )
+import json
 
 stock_bp = Blueprint('stock', __name__)
 
@@ -292,6 +293,38 @@ def get_index_prices():
     price_data_list = get_stock_realtime_data_batch(index_codes)
 
     return jsonify(price_data_list)
+
+
+@stock_bp.route('/settings', methods=['GET', 'POST'])
+def manage_settings():
+    if request.method == 'GET':
+        conn = get_db_connection()
+        cursor = conn.cursor()
+        cursor.execute('SELECT key, value FROM settings')
+        rows = cursor.fetchall()
+        settings = {}
+        for row in rows:
+            try:
+                settings[row['key']] = json.loads(row['value'])
+            except:
+                settings[row['key']] = row['value']
+        conn.close()
+        app_logger.info("获取股票设置")
+        return jsonify(settings)
+
+    elif request.method == 'POST':
+        data = request.get_json()
+        if not data:
+            app_logger.warning("尝试保存股票设置但缺少数据")
+            return jsonify({'error': '缺少数据'}), 400
+
+        for key, value in data.items():
+            if not set_setting(key, value):
+                app_logger.error("保存股票设置失败")
+                return jsonify({'error': '保存设置失败'}), 500
+
+        app_logger.info(f"保存股票设置成功: {data}")
+        return jsonify({'success': True, 'settings': data})
 
 
 @stock_bp.route('/batch_data', methods=['GET'])
