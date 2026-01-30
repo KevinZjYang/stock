@@ -41,20 +41,81 @@
             outline: none;
         }
 
-        .input-area button {
-            padding: 8px 16px; 
-            border: none; 
-            border-radius: 4px; 
-            cursor: pointer; 
-            font-weight: 600; 
+        /* 统一按钮样式 */
+        .btn {
+            padding: 8px 16px;
+            border: none;
+            border-radius: 4px;
+            cursor: pointer;
             font-size: 14px;
-            transition: background 0.2s;
+            font-weight: 600;
+            transition: all 0.2s;
+            text-decoration: none;
+            display: inline-block;
+            text-align: center;
+            vertical-align: middle;
+            user-select: none;
         }
-        
-        .btn-primary { background: #3498db; color: white; }
-        .btn-primary:hover { background: #2980b9; }
-        .btn-settings { background: #95a5a6; color: white; }
-        .btn-settings:hover { background: #7f8c8d; }
+
+        .btn-sm {
+            padding: 6px 12px;
+            font-size: 12px;
+        }
+
+        .btn-lg {
+            padding: 12px 24px;
+            font-size: 16px;
+        }
+
+        .btn-primary {
+            background: #3498db;
+            color: white;
+        }
+
+        .btn-primary:hover {
+            background: #2980b9;
+        }
+
+        .btn-settings {
+            background: #95a5a6;
+            color: white;
+        }
+
+        .btn-settings:hover {
+            background: #7f8c8d;
+        }
+
+        .btn-success {
+            background: #27ae60;
+            color: white;
+        }
+
+        .btn-success:hover {
+            background: #219150;
+        }
+
+        .btn-danger {
+            background: #e74c3c;
+            color: white;
+        }
+
+        .btn-danger:hover {
+            background: #c0392b;
+        }
+
+        .btn-warning {
+            background: #f39c12;
+            color: white;
+        }
+
+        .btn-warning:hover {
+            background: #e67e22;
+        }
+
+        .btn:disabled {
+            opacity: 0.6;
+            cursor: not-allowed;
+        }
 
         /* 搜索结果下拉列表 */
         .search-results {
@@ -162,9 +223,48 @@
         .modal-content h3 { margin-top: 0; }
         .modal-content input { width: 100%; padding: 8px; margin: 10px 0; border: 1px solid #ccc; border-radius: 4px; }
         .modal-buttons { display: flex; justify-content: flex-end; gap: 10px; margin-top: 15px; }
+
+        /* 特定于监控对话框的按钮样式 */
+        #monitorModal .modal-buttons {
+            margin-top: 20px;
+            justify-content: flex-end;
+        }
         .modal-btn { padding: 8px 16px; border: none; border-radius: 4px; cursor: pointer; }
         .modal-btn.cancel { background: #eee; }
         .modal-btn.save { background: #3498db; color: white; }
+
+        /* 表单网格布局 */
+        .form-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(150px, 1fr));
+            gap: 15px;
+            margin-bottom: 15px;
+        }
+
+        .form-group {
+            display: flex;
+            flex-direction: column;
+        }
+
+        .form-group label {
+            font-size: 12px;
+            color: #555;
+            margin-bottom: 5px;
+            font-weight: 600;
+        }
+
+        .form-group input, .form-group select {
+            padding: 8px 10px;
+            border: 1px solid #ddd;
+            border-radius: 4px;
+            font-size: 14px;
+            transition: border-color 0.2s;
+        }
+
+        .form-group input:focus, .form-group select:focus {
+            border-color: #3498db;
+            outline: none;
+        }
 
         /* Toast */
         #localToastContainer { position: fixed; bottom: 20px; left: 50%; transform: translateX(-50%); z-index: 3000; display: flex; flex-direction: column; gap: 10px; width: 90%; max-width: 400px; pointer-events: none; }
@@ -364,12 +464,12 @@
     <div class="input-container">
         <div class="input-area">
             <input type="text" id="symbolInput" placeholder="输入股票代码或名称 (如 600519 或 贵州茅台)" autocomplete="off">
-            <button class="btn-primary" onclick="addSymbol()">添加</button>
+            <button class="btn btn-primary" onclick="addSymbol()">添加</button>
             <!-- 搜索结果下拉列表 -->
             <div id="searchResults" class="search-results"></div>
         </div>
-        <button class="btn-settings" onclick="openSettings()">设置</button>
-        <button class="btn-settings" onclick="openIndexConfig()">指数配置</button>
+        <button class="btn btn-settings" onclick="openSettings()">设置</button>
+        <button class="btn btn-settings" onclick="openIndexConfig()">指数配置</button>
     </div>
 
     <!-- 指数显示 -->
@@ -411,8 +511,8 @@
             <label>股票刷新间隔 (秒):</label>
             <input type="number" id="refreshIntervalInput" min="1" max="60" placeholder="10">
             <div class="modal-buttons">
-                <button class="modal-btn cancel" onclick="closeSettings()">取消</button>
-                <button class="modal-btn save" onclick="saveSettings()">保存</button>
+                <button class="btn btn-secondary" onclick="closeSettings()">取消</button>
+                <button class="btn btn-primary" onclick="saveSettings()">保存</button>
             </div>
         </div>
     </div>
@@ -1018,8 +1118,8 @@
                 <td id="high_price-${symbol}">--</td>
                 <td id="low_price-${symbol}">--</td>
                 <td>
-                    <button class="btn-monitor" onclick="openMonitorDialog('${symbol}', '${name.replace(/'/g, "\\'")}')">监控</button>
-                    <button class="delete" onclick="deleteSymbol('${symbol}')">删除</button>
+                    <button class="btn btn-warning btn-sm" onclick="openMonitorDialog('${symbol}', '${name.replace(/'/g, "\\'")}')">监控</button>
+                    <button class="btn btn-danger btn-sm" onclick="deleteSymbol('${symbol}')">删除</button>
                 </td>
             `;
             tbody.appendChild(row);
@@ -1247,9 +1347,9 @@
                                         </tbody>
                                     </table>
                                 </div>
-                                <div class="modal-buttons" style="margin-top: 20px; display: flex; justify-content: flex-end; gap: 10px;">
-                                    <button class="modal-btn cancel" onclick="closeIndexConfig()">取消</button>
-                                    <button class="modal-btn save" onclick="saveIndexConfig()">保存</button>
+                                <div class="modal-buttons">
+                                    <button class="btn btn-secondary" onclick="closeIndexConfig()">取消</button>
+                                    <button class="btn btn-primary" onclick="saveIndexConfig()">保存</button>
                                 </div>
                             </div>
                         </div>
@@ -1507,8 +1607,8 @@
                 </div>
             </div>
             <div class="modal-buttons">
-                <button class="modal-btn cancel" onclick="closeMonitorDialog()">取消</button>
-                <button class="modal-btn save" onclick="addMonitorCondition()">添加监控</button>
+                <button class="btn btn-secondary" onclick="closeMonitorDialog()">取消</button>
+                <button class="btn btn-primary" onclick="addMonitorCondition()">添加监控</button>
             </div>
         </div>
     </div>

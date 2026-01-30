@@ -95,6 +95,7 @@
             flex-wrap: wrap;
         }
 
+        /* 统一按钮样式 */
         .btn {
             padding: 8px 16px;
             border: none;
@@ -103,22 +104,72 @@
             font-size: 14px;
             font-weight: 600;
             transition: all 0.2s;
+            text-decoration: none;
+            display: inline-block;
+            text-align: center;
+            vertical-align: middle;
+            user-select: none;
         }
 
-        .btn-primary { background: #3498db; color: white; }
-        .btn-primary:hover { background: #2980b9; }
-        
-        .btn-secondary { background: #95a5a6; color: white; }
-        .btn-secondary:hover { background: #7f8c8d; }
+        .btn-sm {
+            padding: 6px 12px;
+            font-size: 12px;
+        }
 
-        .btn-success { background: #27ae60; color: white; }
-        .btn-success:hover { background: #219150; }
+        .btn-lg {
+            padding: 12px 24px;
+            font-size: 16px;
+        }
 
-        .btn-danger { background: #e74c3c; color: white; }
-        .btn-danger:hover { background: #c0392b; }
+        .btn-primary {
+            background: #3498db;
+            color: white;
+        }
 
-        .btn-edit { background: #f39c12; color: white; padding: 4px 8px; font-size: 12px; }
-        .btn-delete { background: #e74c3c; color: white; padding: 4px 8px; font-size: 12px; }
+        .btn-primary:hover {
+            background: #2980b9;
+        }
+
+        .btn-settings {
+            background: #95a5a6;
+            color: white;
+        }
+
+        .btn-settings:hover {
+            background: #7f8c8d;
+        }
+
+        .btn-success {
+            background: #27ae60;
+            color: white;
+        }
+
+        .btn-success:hover {
+            background: #219150;
+        }
+
+        .btn-danger {
+            background: #e74c3c;
+            color: white;
+        }
+
+        .btn-danger:hover {
+            background: #c0392b;
+        }
+
+        .btn-warning {
+            background: #f39c12;
+            color: white;
+        }
+
+        .btn-warning:hover {
+            background: #e67e22;
+        }
+
+        .btn:disabled {
+            opacity: 0.6;
+            cursor: not-allowed;
+        }
 
         /* 表格区域 */
         .table-container {
@@ -371,7 +422,7 @@
         <button class="btn btn-success" onclick="document.getElementById('fileInput').click()">导入 Excel</button>
         <button class="btn btn-secondary" onclick="handleExport()">导出 Excel</button>
         <!-- 新增：刷新市值按钮 -->
-        <button class="btn btn-info" onclick="refreshMarketValue()">刷新市值</button>
+        <button class="btn btn-warning" onclick="refreshMarketValue()">刷新市值</button>
         <!-- 新增：清空所有记录按钮 -->
         <button class="btn btn-danger" onclick="clearAllRecords()">清空所有记录</button>
         
@@ -428,7 +479,7 @@
                     <label>基金代码</label>
                     <div class="fund-lookup-container">
                         <input type="text" id="code" placeholder="输入代码或名称" required style="flex: 1;" autocomplete="off">
-                        <button type="button" class="btn btn-secondary" onclick="lookupFundName()">查找</button>
+                        <button type="button" class="btn btn-secondary btn-sm" onclick="lookupFundName()">查找</button>
                         <!-- 搜索结果下拉列表 -->
                         <div id="searchResults" class="search-results"></div>
                     </div>
@@ -460,8 +511,8 @@
                 </div>
 
                 <div class="modal-buttons">
-                    <button type="button" class="modal-btn cancel" onclick="closeModal()">取消</button>
-                    <button type="submit" class="modal-btn save" id="submitBtn">保存记录</button>
+                    <button type="button" class="btn btn-secondary" onclick="closeModal()">取消</button>
+                    <button type="submit" class="btn btn-primary" id="submitBtn">保存记录</button>
                 </div>
             </form>
         </div>
@@ -830,8 +881,8 @@
                     <td>${price.toFixed(4)}</td>
                     <td>${fee.toFixed(2)}</td>
                     <td class="actions-cell">
-                        <button class="btn btn-edit" onclick="editRecord(${item.id})">编辑</button>
-                        <button class="btn btn-delete" onclick="deleteRecord(${item.id})">删除</button>
+                        <button class="btn btn-warning btn-sm" onclick="editRecord(${item.id})">编辑</button>
+                        <button class="btn btn-danger btn-sm" onclick="deleteRecord(${item.id})">删除</button>
                     </td>
                 `;
                 

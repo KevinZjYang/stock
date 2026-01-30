@@ -41,20 +41,81 @@
             outline: none;
         }
 
-        .input-area button {
-            padding: 8px 16px; 
-            border: none; 
-            border-radius: 4px; 
-            cursor: pointer; 
-            font-weight: 600; 
+        /* 统一按钮样式 */
+        .btn {
+            padding: 8px 16px;
+            border: none;
+            border-radius: 4px;
+            cursor: pointer;
             font-size: 14px;
-            transition: background 0.2s;
+            font-weight: 600;
+            transition: all 0.2s;
+            text-decoration: none;
+            display: inline-block;
+            text-align: center;
+            vertical-align: middle;
+            user-select: none;
         }
-        
-        .btn-primary { background: #3498db; color: white; }
-        .btn-primary:hover { background: #2980b9; }
-        .btn-settings { background: #95a5a6; color: white; }
-        .btn-settings:hover { background: #7f8c8d; }
+
+        .btn-sm {
+            padding: 6px 12px;
+            font-size: 12px;
+        }
+
+        .btn-lg {
+            padding: 12px 24px;
+            font-size: 16px;
+        }
+
+        .btn-primary {
+            background: #3498db;
+            color: white;
+        }
+
+        .btn-primary:hover {
+            background: #2980b9;
+        }
+
+        .btn-settings {
+            background: #95a5a6;
+            color: white;
+        }
+
+        .btn-settings:hover {
+            background: #7f8c8d;
+        }
+
+        .btn-success {
+            background: #27ae60;
+            color: white;
+        }
+
+        .btn-success:hover {
+            background: #219150;
+        }
+
+        .btn-danger {
+            background: #e74c3c;
+            color: white;
+        }
+
+        .btn-danger:hover {
+            background: #c0392b;
+        }
+
+        .btn-warning {
+            background: #f39c12;
+            color: white;
+        }
+
+        .btn-warning:hover {
+            background: #e67e22;
+        }
+
+        .btn:disabled {
+            opacity: 0.6;
+            cursor: not-allowed;
+        }
 
         /* 搜索结果下拉列表 */
         .search-results {
@@ -130,10 +191,6 @@
         .modal-content { background: white; padding: 20px; border-radius: 8px; width: 90%; max-width: 400px; }
         .modal-content h3 { margin-top: 0; }
         .modal-content input { width: 100%; padding: 8px; margin: 10px 0; border: 1px solid #ccc; border-radius: 4px; }
-        .modal-buttons { display: flex; justify-content: flex-end; gap: 10px; margin-top: 15px; }
-        .modal-btn { padding: 8px 16px; border: none; border-radius: 4px; cursor: pointer; }
-        .modal-btn.cancel { background: #eee; }
-        .modal-btn.save { background: #3498db; color: white; }
 
         /* Toast */
         #localToastContainer { position: fixed; bottom: 20px; left: 50%; transform: translateX(-50%); z-index: 3000; display: flex; flex-direction: column; gap: 10px; width: 90%; max-width: 400px; pointer-events: none; }
@@ -209,11 +266,11 @@
     <div class="input-container">
         <div class="input-area">
             <input type="text" id="fundCodeInput" placeholder="输入基金代码或名称 (如 000001 或 华夏成长)" autocomplete="off">
-            <button class="btn-primary" onclick="addFund()">添加</button>
+            <button class="btn btn-primary" onclick="addFund()">添加</button>
             <!-- 搜索结果下拉列表 -->
             <div id="searchResults" class="search-results"></div>
         </div>
-        <button class="btn-settings" onclick="openSettings()">设置</button>
+        <button class="btn btn-settings" onclick="openSettings()">设置</button>
     </div>
 
     <!-- 表格区域 -->
@@ -249,8 +306,8 @@
             <label>基金刷新间隔 (秒):</label>
             <input type="number" id="refreshIntervalInput" min="10" max="3600" placeholder="600">
             <div class="modal-buttons">
-                <button class="modal-btn cancel" onclick="closeSettings()">取消</button>
-                <button class="modal-btn save" onclick="saveSettings()">保存</button>
+                <button class="btn btn-secondary" onclick="closeSettings()">取消</button>
+                <button class="btn btn-primary" onclick="saveSettings()">保存</button>
             </div>
         </div>
     </div>
@@ -620,7 +677,7 @@
                 <td id="lastWeekGrowth-${code}">--</td>
                 <td id="lastMonthGrowth-${code}">--</td>
                 <td id="lastYearGrowth-${code}">--</td>
-                <td><button class="delete" onclick="deleteFund('${code}')">删除</button></td>
+                <td><button class="btn btn-danger btn-sm" onclick="deleteFund('${code}')">删除</button></td>
             `;
             tbody.appendChild(row);
         }
