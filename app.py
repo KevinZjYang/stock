@@ -2003,13 +2003,19 @@ def export_transactions():
 @app.route('/api/log/list', methods=['GET'])
 def get_log_list():
     """获取日志列表"""
+    client_ip = request.remote_addr
+    app_logger.info(f"获取系统日志请求来自: {client_ip}")
     logs = get_logs()
+    app_logger.info(f"返回 {len(logs)} 条系统日志, IP: {client_ip}")
     return jsonify(logs)
 
 @app.route('/api/log/clear', methods=['POST'])
 def clear_log_list():
     """清空日志"""
+    client_ip = request.remote_addr
+    app_logger.info(f"清空系统日志请求来自: {client_ip}")
     clear_logs()
+    app_logger.info(f"系统日志已清空, IP: {client_ip}")
     return jsonify({'success': True, 'message': '日志已清空'})
 
 # ==================== ���面路由 ====================

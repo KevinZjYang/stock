@@ -96,7 +96,11 @@ def manage_watchlist():
 @stock_bp.route('/search', methods=['GET'])
 def search_stock():
     code = request.args.get('code', '').strip()
+    client_ip = request.remote_addr
+    app_logger.info(f"股票搜索请求来自: {client_ip}, 代码: {code}")
+
     if not code:
+        app_logger.warning(f"股票搜索失败: 缺少股票代码, IP: {client_ip}")
         return jsonify({'error': '缺少股票代码'}), 400
 
     # 在数据库中搜索
@@ -104,6 +108,8 @@ def search_stock():
 
     # 从API获取实时数据
     realtime_data = get_stock_realtime_data(code)
+
+    app_logger.info(f"股票搜索完成: {code}, 结果数量: DB={len(db_results)}, 实时数据={'有' if realtime_data else '无'}, IP: {client_ip}")
 
     response = make_response(jsonify({
         'excel_results': db_results,  # 现在是从数据库获取的股票数据
@@ -117,11 +123,16 @@ def search_stock():
 
 @stock_bp.route('/detail/<code>', methods=['GET'])
 def get_stock_detail(code):
+    client_ip = request.remote_addr
+    app_logger.info(f"获取股票详情请求来自: {client_ip}, 代码: {code}")
+
     # 在数据库中搜索
     db_results = search_stock_by_code(code)
 
     # 从API获取实时数据
     realtime_data = get_stock_realtime_data(code)
+
+    app_logger.info(f"股票详情获取完成: {code}, 结果数量: DB={len(db_results)}, 实时数据={'有' if realtime_data else '无'}, IP: {client_ip}")
 
     response = make_response(jsonify({
         'excel_results': db_results,  # 现在是从数据库获取的股票数据
@@ -174,14 +185,21 @@ def get_watchlist_detail():
 
 @stock_bp.route('/prices', methods=['GET'])
 def get_stock_prices():
+    client_ip = request.remote_addr
+    app_logger.info(f"获取股票价格请求来自: {client_ip}")
+
     watchlist = load_stock_watchlist()
     if not watchlist:
+        app_logger.info(f"股票关注列表为空, IP: {client_ip}")
         return jsonify([])
 
     # 收集所有股票代码，然后批量获取
     symbols = [item['code'] for item in watchlist]
+    app_logger.info(f"获取 {len(symbols)} 个股票的价格, IP: {client_ip}")
+
     price_data_list = get_stock_realtime_data_batch(symbols)
 
+    app_logger.info(f"返回 {len(price_data_list)} 个股票价格数据, IP: {client_ip}")
     return jsonify(price_data_list)
 
 @stock_bp.route('/prices_batch', methods=['GET'])

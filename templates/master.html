@@ -527,15 +527,37 @@
                 // 所以我们从后往前遍历，但不反转数组，这样最新的在顶部
                 for (let i = logs.length - 1; i >= 0; i--) {
                     const log = logs[i];
+                    // 转义特殊字符以防止XSS和HTML结构破坏
+                    const escapedMessage = log.message
+                        .replace(/&/g, '&amp;')
+                        .replace(/</g, '&lt;')
+                        .replace(/>/g, '&gt;')
+                        .replace(/"/g, '&quot;')
+                        .replace(/'/g, '&#x27;');
+
+                    const escapedPage = log.page
+                        .replace(/&/g, '&amp;')
+                        .replace(/</g, '&lt;')
+                        .replace(/>/g, '&gt;')
+                        .replace(/"/g, '&quot;')
+                        .replace(/'/g, '&#x27;');
+
+                    const escapedFunction = log.function
+                        .replace(/&/g, '&amp;')
+                        .replace(/</g, '&lt;')
+                        .replace(/>/g, '&gt;')
+                        .replace(/"/g, '&quot;')
+                        .replace(/'/g, '&#x27;');
+
                     // 将完整日志内容作为 title 属性，鼠标悬停时显示
-                    const fullLogText = `[${log.timestamp}] [${log.page}] [${log.function}] [${log.level}] ${log.message}`;
+                    const fullLogText = `[${log.timestamp}] [${escapedPage}] [${escapedFunction}] [${log.level}] ${escapedMessage}`;
                     html += `
                         <div class="log-entry" title="${fullLogText}" onclick="copyLogToClipboard(this, '${fullLogText.replace(/'/g, "\\'")}')">
                             <span class="log-timestamp">[${log.timestamp}]</span>
-                            <span class="log-page">[${log.page}]</span>
-                            <span class="log-function">[${log.function}]</span>
+                            <span class="log-page">[${escapedPage}]</span>
+                            <span class="log-function">[${escapedFunction}]</span>
                             <span class="log-level log-level-${log.level}">[${log.level}]</span>
-                            <span class="log-message">${log.message}</span>
+                            <span class="log-message">${escapedMessage}</span>
                         </div>
                     `;
                 }
