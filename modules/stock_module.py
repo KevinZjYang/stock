@@ -321,7 +321,11 @@ def get_index_prices():
     # 批量获取指数数据
     price_data_list = get_stock_realtime_data_batch(index_codes)
 
-    return jsonify(price_data_list)
+    # 按照设置的顺序重新排序数据
+    price_data_map = {item['symbol']: item for item in price_data_list}
+    ordered_data = [price_data_map[code] for code in index_codes if code in price_data_map]
+
+    return jsonify(ordered_data)
 
 
 @stock_bp.route('/settings', methods=['GET', 'POST'])
@@ -385,8 +389,9 @@ def get_batch_data():
     # 批量获取所有数据
     price_data_list = get_stock_realtime_data_batch(all_codes)
 
-    # 分离指数和股票数据
-    index_data = [item for item in price_data_list if item['symbol'] in index_codes]
+    # 按照设置的顺序重新排序指数数据
+    price_data_map = {item['symbol']: item for item in price_data_list}
+    index_data = [price_data_map[code] for code in index_codes if code in price_data_map]
     stock_data = [item for item in price_data_list if item['symbol'] in stock_codes]
 
     return jsonify({
