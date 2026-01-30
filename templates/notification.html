@@ -1,0 +1,597 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>价格通知管理</title>
+    <style>
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
+            background: #f8f9fa;
+            margin: 0;
+            padding: 20px;
+            color: #333;
+        }
+
+        .container {
+            max-width: 1000px;
+            margin: 0 auto;
+            background: white;
+            border-radius: 8px;
+            box-shadow: 0 2px 10px rgba(0,0,0,0.1);
+            overflow: hidden;
+        }
+
+        .header {
+            background: #2c3e50;
+            color: white;
+            padding: 20px;
+            text-align: center;
+        }
+
+        .content {
+            padding: 20px;
+        }
+
+        .section {
+            margin-bottom: 30px;
+            padding: 20px;
+            border: 1px solid #e0e0e0;
+            border-radius: 6px;
+            background: #fafafa;
+        }
+
+        .section-title {
+            font-size: 18px;
+            font-weight: bold;
+            margin-bottom: 15px;
+            color: #2c3e50;
+            border-bottom: 2px solid #3498db;
+            padding-bottom: 5px;
+        }
+
+        .form-group {
+            margin-bottom: 15px;
+        }
+
+        .form-group label {
+            display: block;
+            margin-bottom: 5px;
+            font-weight: 600;
+            color: #555;
+        }
+
+        .form-row {
+            display: flex;
+            gap: 15px;
+            align-items: end;
+        }
+
+        .form-col {
+            flex: 1;
+        }
+
+        .form-control {
+            width: 100%;
+            padding: 8px 12px;
+            border: 1px solid #ddd;
+            border-radius: 4px;
+            font-size: 14px;
+        }
+
+        .btn {
+            padding: 10px 20px;
+            border: none;
+            border-radius: 4px;
+            cursor: pointer;
+            font-size: 14px;
+            font-weight: 600;
+            transition: background 0.2s;
+        }
+
+        .btn-primary { background: #3498db; color: white; }
+        .btn-primary:hover { background: #2980b9; }
+
+        .btn-success { background: #27ae60; color: white; }
+        .btn-success:hover { background: #219150; }
+
+        .btn-danger { background: #e74c3c; color: white; }
+        .btn-danger:hover { background: #c0392b; }
+
+        .btn-sm {
+            padding: 5px 10px;
+            font-size: 12px;
+        }
+
+        .btn-warning { background: #f39c12; color: white; }
+        .btn-warning:hover { background: #e67e22; }
+
+        table {
+            width: 100%;
+            border-collapse: collapse;
+            margin-top: 15px;
+        }
+
+        th, td {
+            padding: 12px;
+            text-align: left;
+            border-bottom: 1px solid #eee;
+        }
+
+        th {
+            background: #f8f9fa;
+            font-weight: 600;
+            color: #555;
+        }
+
+        tr:hover {
+            background: #f1f5f9;
+        }
+
+        .condition-type {
+            padding: 4px 8px;
+            border-radius: 4px;
+            font-size: 12px;
+            font-weight: bold;
+        }
+
+        .type-above { background: #d4edda; color: #155724; }
+        .type-below { background: #f8d7da; color: #721c24; }
+        .type-percent { background: #d1ecf1; color: #0c5460; }
+        .type-amount { background: #fff3cd; color: #856404; }
+
+        .toast {
+            position: fixed;
+            top: 20px;
+            right: 20px;
+            padding: 15px 20px;
+            border-radius: 4px;
+            color: white;
+            font-weight: 600;
+            z-index: 1000;
+            display: none;
+        }
+
+        .toast.success { background: #28a745; }
+        .toast.error { background: #dc3545; }
+        .toast.warning { background: #ffc107; color: #212529; }
+
+        .status-indicator {
+            display: inline-block;
+            width: 10px;
+            height: 10px;
+            border-radius: 50%;
+            margin-right: 5px;
+        }
+
+        .status-active {
+            background: #28a745;
+            animation: pulse 2s infinite;
+        }
+
+        .status-inactive {
+            background: #dc3545;
+        }
+
+        @keyframes pulse {
+            0% { opacity: 1; }
+            50% { opacity: 0.5; }
+            100% { opacity: 1; }
+        }
+
+        @media (max-width: 768px) {
+            .form-row {
+                flex-direction: column;
+                gap: 10px;
+            }
+
+            .container {
+                margin: 10px;
+            }
+
+            .content {
+                padding: 15px;
+            }
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <div class="header">
+            <h1>价格变动通知管理</h1>
+            <p>设置价格监控条件，达到目标时通过企业微信机器人发送通知</p>
+        </div>
+
+        <div class="content">
+            <div class="section">
+                <div class="section-title">企业微信机器人设置</div>
+                <div class="form-group">
+                    <label for="webhookUrl">Webhook 地址</label>
+                    <input type="text" id="webhookUrl" class="form-control" placeholder="https://qyapi.weixin.qq.com/cgi-bin/webhook/send?key=xxx">
+                </div>
+                <button class="btn btn-success" onclick="saveWebhook()">保存 Webhook 地址</button>
+            </div>
+
+            <div class="section">
+                <div class="section-title">添加价格通知条件</div>
+                <div class="form-row">
+                    <div class="form-col">
+                        <div class="form-group">
+                            <label for="symbol">股票代码</label>
+                            <div style="position: relative;">
+                                <input type="text" id="symbol" class="form-control" placeholder="输入代码或名称搜索" autocomplete="off">
+                                <!-- 搜索结果下拉列表 -->
+                                <div id="searchResults" class="search-results" style="position: absolute; top: 100%; left: 0; right: 0; background: white; border: 1px solid #ddd; border-top: none; max-height: 200px; overflow-y: auto; z-index: 1000; display: none; box-shadow: 0 2px 5px rgba(0,0,0,0.1);"></div>
+                            </div>
+                        </div>
+                    </div>
+                    <div class="form-col">
+                        <div class="form-group">
+                            <label for="conditionType">通知条件</label>
+                            <select id="conditionType" class="form-control">
+                                <option value="above_price">价格达到或超过</option>
+                                <option value="below_price">价格跌至或低于</option>
+                                <option value="change_percent">涨跌幅达到</option>
+                                <option value="change_amount">涨跌额达到</option>
+                            </select>
+                        </div>
+                    </div>
+                    <div class="form-col">
+                        <div class="form-group">
+                            <label for="thresholdValue">阈值</label>
+                            <input type="number" id="thresholdValue" class="form-control" placeholder="数值" step="any">
+                        </div>
+                    </div>
+                    <div class="form-col">
+                        <button class="btn btn-primary" onclick="addNotification()">添加监控</button>
+                    </div>
+                </div>
+            </div>
+
+            <div class="section">
+                <div class="section-title">当前监控列表</div>
+                <div style="display: flex; align-items: center; justify-content: space-between; margin-bottom: 10px;">
+                    <div style="display: flex; align-items: center;">
+                        <span class="status-indicator status-active"></span>
+                        <span>监控状态: 运行中 (每5分钟检查一次)</span>
+                    </div>
+                    <button class="btn btn-warning" onclick="manualCheckNotifications()">手动触发检查</button>
+                </div>
+                <table id="notificationTable">
+                    <thead>
+                        <tr>
+                            <th>ID</th>
+                            <th>股票代码</th>
+                            <th>股票名称</th>
+                            <th>通知条件</th>
+                            <th>阈值</th>
+                            <th>创建时间</th>
+                            <th>操作</th>
+                        </tr>
+                    </thead>
+                    <tbody id="notificationTableBody">
+                        <!-- 动态填充 -->
+                    </tbody>
+                </table>
+            </div>
+        </div>
+    </div>
+
+    <div id="toast" class="toast"></div>
+
+    <script>
+        // 页面加载完成后获取现有数据
+        document.addEventListener('DOMContentLoaded', function() {
+            loadWebhookUrl();
+            loadNotifications();
+            setupSymbolSearch();
+
+            // 监听来自父页面的消息
+            window.addEventListener('message', function(event) {
+                if (event.origin !== window.location.origin) return;
+
+                if (event.data.type === 'REFRESH_DATA') {
+                    loadNotifications(); // 刷新通知列表
+                }
+            });
+        });
+
+        // 加载webhook地址
+        async function loadWebhookUrl() {
+            try {
+                const response = await fetch('/api/webhook');
+                const data = await response.json();
+
+                if (data.webhook_url) {
+                    document.getElementById('webhookUrl').value = data.webhook_url;
+                }
+            } catch (error) {
+                showToast('获取Webhook地址失败', 'error');
+            }
+        }
+
+        // 保存webhook地址
+        async function saveWebhook() {
+            const webhookUrl = document.getElementById('webhookUrl').value.trim();
+
+            if (!webhookUrl) {
+                showToast('请输入Webhook地址', 'error');
+                return;
+            }
+
+            try {
+                const response = await fetch('/api/webhook', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ webhook_url: webhookUrl })
+                });
+
+                const data = await response.json();
+
+                if (response.ok && data.success) {
+                    showToast('Webhook地址保存成功', 'success');
+                } else {
+                    showToast(data.error || '保存失败', 'error');
+                }
+            } catch (error) {
+                showToast('保存Webhook地址时发生错误', 'error');
+            }
+        }
+
+        // 设置股票代码搜索功能
+        function setupSymbolSearch() {
+            const symbolInput = document.getElementById('symbol');
+            const searchResults = document.getElementById('searchResults');
+            let searchTimeout = null;
+
+            symbolInput.addEventListener('input', function(e) {
+                const query = e.target.value.trim();
+
+                // 清除之前的定时器
+                if (searchTimeout) clearTimeout(searchTimeout);
+
+                // 如果输入为空，隐藏下拉列表
+                if (!query) {
+                    searchResults.style.display = 'none';
+                    return;
+                }
+
+                // 防抖：300ms 后执行搜索
+                searchTimeout = setTimeout(() => {
+                    performSearch(query);
+                }, 300);
+            });
+
+            // 点击外部关闭下拉列表
+            document.addEventListener('click', function(e) {
+                if (!symbolInput.contains(e.target) && !searchResults.contains(e.target)) {
+                    searchResults.style.display = 'none';
+                }
+            });
+        }
+
+        // 执行搜索
+        async function performSearch(query) {
+            try {
+                const response = await fetch(`/api/stock/search?code=${encodeURIComponent(query)}`);
+                if (!response.ok) throw new Error(`HTTP ${response.status}`);
+
+                const data = await response.json();
+                // 使用excel_results，这是从数据库返回的数据
+                displaySearchResults(data.excel_results || []);
+            } catch (error) {
+                console.error('搜索失败:', error);
+                document.getElementById('searchResults').innerHTML = '<div style="padding: 8px; color: #e74c3c;">搜索失败，请检查网络</div>';
+                document.getElementById('searchResults').style.display = 'block';
+            }
+        }
+
+        // 显示搜索结果
+        function displaySearchResults(results) {
+            const searchResults = document.getElementById('searchResults');
+
+            if (results.length === 0) {
+                searchResults.innerHTML = '<div style="padding: 8px; color: #999;">未找到匹配结果</div>';
+            } else {
+                searchResults.innerHTML = results.map(item => {
+                    return `
+                        <div class="search-result-item" style="padding: 8px; cursor: pointer; border-bottom: 1px solid #eee; font-size: 13px;"
+                             onclick="selectSymbol('${item.code}', '${item.name.replace(/'/g, "\\'")}')">
+                            <strong>${item.code}</strong> - ${item.name}
+                        </div>
+                    `;
+                }).join('');
+            }
+            searchResults.style.display = 'block';
+        }
+
+        // 选择股票代码
+        function selectSymbol(code, name) {
+            document.getElementById('symbol').value = `${code} - ${name}`;
+            document.getElementById('searchResults').style.display = 'none';
+        }
+
+        // 添加通知条件
+        async function addNotification() {
+            const symbolInput = document.getElementById('symbol').value.trim();
+            const conditionType = document.getElementById('conditionType').value;
+            const thresholdValue = parseFloat(document.getElementById('thresholdValue').value);
+
+            if (!symbolInput) {
+                showToast('请输入股票代码', 'error');
+                return;
+            }
+
+            // 从输入中提取股票代码（支持 "代码 - 名称" 格式）
+            let symbol = symbolInput;
+            const match = symbolInput.match(/^([A-Za-z0-9]+)(\s*-\s*.*)?$/);
+            if (match) {
+                symbol = match[1];
+            }
+
+            if (isNaN(thresholdValue)) {
+                showToast('请输入有效的阈值', 'error');
+                return;
+            }
+
+            try {
+                const response = await fetch('/api/notifications', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({
+                        symbol: symbol,
+                        condition_type: conditionType,
+                        threshold_value: thresholdValue
+                    })
+                });
+
+                const data = await response.json();
+
+                if (response.ok && data.success) {
+                    showToast('通知条件添加成功', 'success');
+                    document.getElementById('symbol').value = '';
+                    document.getElementById('thresholdValue').value = '';
+                    loadNotifications(); // 刷新列表
+                } else {
+                    showToast(data.error || '添加失败', 'error');
+                }
+            } catch (error) {
+                showToast('添加通知条件时发生错误', 'error');
+            }
+        }
+
+        // 删除通知条件
+        async function deleteNotification(id) {
+            if (!confirm('确定要删除这个监控条件吗？')) {
+                return;
+            }
+
+            try {
+                const response = await fetch('/api/notifications', {
+                    method: 'DELETE',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ id: id })
+                });
+
+                const data = await response.json();
+
+                if (response.ok && data.success) {
+                    showToast('通知条件删除成功', 'success');
+                    loadNotifications(); // 刷新列表
+                } else {
+                    showToast(data.error || '删除失败', 'error');
+                }
+            } catch (error) {
+                showToast('删除通知条件时发生错误', 'error');
+            }
+        }
+
+        // 加载通知列表
+        async function loadNotifications() {
+            try {
+                const response = await fetch('/api/notifications');
+                const notifications = await response.json();
+
+                const tbody = document.getElementById('notificationTableBody');
+                tbody.innerHTML = '';
+
+                if (notifications.length === 0) {
+                    tbody.innerHTML = '<tr><td colspan="7" style="text-align: center; color: #999;">暂无监控条件</td></tr>';
+                    return;
+                }
+
+                notifications.forEach(notification => {
+                    const row = document.createElement('tr');
+
+                    // 解析条件类型
+                    let conditionText = '';
+                    let conditionClass = '';
+                    switch(notification.condition_type) {
+                        case 'above_price':
+                            conditionText = `价格 ≥ ${notification.threshold_value}`;
+                            conditionClass = 'type-above';
+                            break;
+                        case 'below_price':
+                            conditionText = `价格 ≤ ${notification.threshold_value}`;
+                            conditionClass = 'type-below';
+                            break;
+                        case 'change_percent':
+                            conditionText = `涨跌幅 ≥ ${Math.abs(notification.threshold_value)}%`;
+                            conditionClass = 'type-percent';
+                            break;
+                        case 'change_amount':
+                            conditionText = `涨跌额 ≥ ${Math.abs(notification.threshold_value)}元`;
+                            conditionClass = 'type-amount';
+                            break;
+                        default:
+                            conditionText = notification.condition_type;
+                            conditionClass = 'type-amount';
+                    }
+
+                    row.innerHTML = `
+                        <td>${notification.id}</td>
+                        <td>${notification.symbol}</td>
+                        <td>${notification.name || '未知'}</td>
+                        <td><span class="condition-type ${conditionClass}">${conditionText}</span></td>
+                        <td>${notification.threshold_value}</td>
+                        <td>${new Date(notification.created_at).toLocaleString()}</td>
+                        <td>
+                            <button class="btn btn-danger btn-sm" onclick="deleteNotification(${notification.id})">删除</button>
+                        </td>
+                    `;
+
+                    tbody.appendChild(row);
+                });
+            } catch (error) {
+                showToast('加载监控列表失败', 'error');
+            }
+        }
+
+        // 显示提示信息
+        function showToast(message, type) {
+            const toast = document.getElementById('toast');
+            toast.textContent = message;
+            toast.className = `toast ${type}`;
+            toast.style.display = 'block';
+
+            setTimeout(() => {
+                toast.style.display = 'none';
+            }, 3000);
+        }
+
+        // 手动触发检查所有监控条件
+        async function manualCheckNotifications() {
+            try {
+                // 显示加载提示
+                const originalText = document.querySelector('.btn-warning').textContent;
+                document.querySelector('.btn-warning').textContent = '检查中...';
+                document.querySelector('.btn-warning').disabled = true;
+
+                const response = await fetch('/api/notifications/check_now', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' }
+                });
+
+                const result = await response.json();
+
+                if (response.ok && result.success) {
+                    showToast('手动检查完成，请稍后查看结果', 'success');
+                    // 刷新列表以显示可能的状态变化
+                    setTimeout(() => {
+                        loadNotifications();
+                    }, 1000);
+                } else {
+                    showToast(result.message || '手动检查失败', 'error');
+                }
+            } catch (error) {
+                console.error('手动检查失败:', error);
+                showToast('手动检查失败', 'error');
+            } finally {
+                // 恢复按钮状态
+                document.querySelector('.btn-warning').textContent = '手动触发检查';
+                document.querySelector('.btn-warning').disabled = false;
+            }
+        }
+    </script>
+</body>
+</html>

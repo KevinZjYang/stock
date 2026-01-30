@@ -338,6 +338,11 @@
                     <span class="nav-icon">📊</span>
                     <span>基金交易管理</span>
                 </li>
+                <!-- 新增：价格通知管理入口 -->
+                <li class="nav-item" onclick="switchView('notification')">
+                    <span class="nav-icon">🔔</span>
+                    <span>价格通知管理</span>
+                </li>
             </ul>
         </div>
 
@@ -366,6 +371,11 @@
                 <!-- 基金交易管理页面 Iframe -->
                 <div id="fund_transWrapper" class="iframe-wrapper">
                     <iframe src="/fund_trans_page" title="基金交易管理" onload="hideLoading()"></iframe>
+                </div>
+
+                <!-- 价格通知管理页面 Iframe -->
+                <div id="notificationWrapper" class="iframe-wrapper">
+                    <iframe src="/notification_page" title="价格通知管理" onload="hideLoading()"></iframe>
                 </div>
             </div>
         </div>
@@ -405,15 +415,16 @@
             const activeItem = document.querySelector(`.nav-item[onclick="switchView('${view}')"]`);
             if (activeItem) activeItem.classList.add('active');
             
-            const titleMap = { 
-                'stock': '股票监控', 
+            const titleMap = {
+                'stock': '股票监控',
                 'fund': '基金查询',
-                'fund_trans': '基金交易管理'
+                'fund_trans': '基金交易管理',
+                'notification': '价格通知管理'
             };
             document.getElementById('viewTitle').textContent = titleMap[view];
-            
+
             document.querySelectorAll('.iframe-wrapper').forEach(wrapper => wrapper.classList.remove('active'));
-            
+
             setTimeout(() => {
                 const targetWrapper = document.getElementById(view + 'Wrapper');
                 if (targetWrapper) {
@@ -432,6 +443,28 @@
             }
             setTimeout(hideLoading, 500);
         }
+
+        // 通知所有iframe刷新数据
+        function notifyAllFrames(message) {
+            const iframes = document.querySelectorAll('iframe');
+            iframes.forEach(iframe => {
+                try {
+                    iframe.contentWindow.postMessage(message, window.location.origin);
+                } catch (e) {
+                    console.warn('无法向 iframe 发送消息:', e);
+                }
+            });
+        }
+
+        // 监听来自子页面的消息
+        window.addEventListener('message', function(event) {
+            if (event.origin !== window.location.origin) return;
+
+            // 如果子页面通知数据已更改，通知所有页面刷新
+            if (event.data.type === 'DATA_CHANGED') {
+                notifyAllFrames({ type: 'REFRESH_DATA' });
+            }
+        });
 
         function toggleGlobalRefresh() {
             isGlobalPaused = !isGlobalPaused;

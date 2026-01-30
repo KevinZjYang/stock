@@ -812,6 +812,18 @@
             document.addEventListener('visibilitychange', handleVisibilityChange);
 
             window.initPage();
+
+            // 监听来自父页面的消息
+            window.addEventListener('message', function(event) {
+                if (event.origin !== window.location.origin) return;
+
+                if (event.data.type === 'REFRESH_DATA') {
+                    // 在基金页面，我们可能需要刷新基金数据
+                    if (typeof fetchPrices === 'function') {
+                        fetchPrices();
+                    }
+                }
+            });
         });
     </script>
 </body>

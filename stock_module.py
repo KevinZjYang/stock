@@ -3,9 +3,28 @@ from flask import Blueprint, request, jsonify, make_response
 from app import (
     load_stock_watchlist, add_stock_to_watchlist, remove_stock_from_watchlist,
     search_stock_by_code, get_stock_realtime_data, get_stock_realtime_data_batch,
-    app_logger, get_db_connection, set_setting
+    app_logger, get_db_connection
 )
 import json
+import sqlite3
+
+def set_setting(key, value):
+    """设置值"""
+    from app import get_db_connection, app_logger
+    conn = get_db_connection()
+    cursor = conn.cursor()
+    try:
+        cursor.execute('''
+            INSERT OR REPLACE INTO settings (key, value, updated_at)
+            VALUES (?, ?, CURRENT_TIMESTAMP)
+        ''', (key, json.dumps(value)))
+        conn.commit()
+        conn.close()
+        return True
+    except Exception as e:
+        conn.close()
+        app_logger.error(f"保存设置失败 {key}: {e}")
+        return False
 
 stock_bp = Blueprint('stock', __name__)
 

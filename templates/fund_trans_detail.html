@@ -1097,6 +1097,18 @@
         // 页面加载完成后执行初始化
         document.addEventListener('DOMContentLoaded', function() {
             window.initPage();
+
+            // 监听来自父页面的消息
+            window.addEventListener('message', function(event) {
+                if (event.origin !== window.location.origin) return;
+
+                if (event.data.type === 'REFRESH_DATA') {
+                    // 在基金交易管理页面，我们可能需要刷新交易数据
+                    if (typeof loadData === 'function') {
+                        loadData();
+                    }
+                }
+            });
         });
     </script>
 </body>
