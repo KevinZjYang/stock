@@ -61,43 +61,33 @@
             color: #555;
         }
 
-        /* 对于添加监控按钮的容器，移除底部边距 */
-        .add-notification-section .form-row .form-col:last-child .form-group {
-            margin-bottom: 0;
-        }
-
+        /* 表单行布局：垂直居中对齐，确保行内元素在同一水平线上 */
         .form-row {
             display: flex;
             gap: 15px;
-            align-items: end;
+            align-items: center; /* 基线对齐，确保输入框和按钮的底部在同一直线上 */
+            margin-bottom: 15px;
         }
 
         .form-col {
             flex: 1;
+            min-width: 0;
         }
 
-        /* 确保按钮与输入框底部对齐 */
-        .add-notification-section .form-row .form-col:last-child {
-            display: flex;
-            align-items: flex-end;
-        }
-
-        /* 对于添加监控按钮的容器，移除底部边距 */
-        .add-notification-section .form-row .form-col:last-child .form-group {
-            margin-bottom: 0;
-        }
-
+        /* 输入框样式：统一高度和边框 */
         .form-control {
             width: 100%;
-            padding: 8px 12px;
+            padding: 10px 12px;
             border: 1px solid #ddd;
             border-radius: 4px;
             font-size: 14px;
+            box-sizing: border-box;
+            height: 40px; /* 固定高度 */
         }
 
-        /* 统一按钮样式 */
+        /* 按钮基础样式 */
         .btn {
-            padding: 8px 16px;
+            padding: 10px 16px;
             border: none;
             border-radius: 4px;
             cursor: pointer;
@@ -109,68 +99,52 @@
             text-align: center;
             vertical-align: middle;
             user-select: none;
+            white-space: nowrap;
+            height: 40px; /* 固定高度 */
+            line-height: 1.2;
+            box-sizing: border-box;
         }
 
+        /* 修复添加监控按钮的对齐问题：底部对齐 */
+        .add-notification-section .form-col:last-child {
+            display: flex;
+            align-items: flex-end; /* 关键：底部对齐 */
+            margin-bottom: 0; /* 移除列的底部间距 */
+        }
+        
+        .add-notification-section .form-col:last-child .btn {
+            width: 100%;
+            margin-bottom: 0; /* 移除按钮的底部间距 */
+            margin-top: 8px; /* 新增：向下偏移，与输入框底部对齐 */
+        }
+
+        /* 尺寸变体 */
         .btn-sm {
             padding: 6px 12px;
             font-size: 12px;
+            height: 32px;
         }
 
         .btn-lg {
             padding: 12px 24px;
             font-size: 16px;
+            height: 48px;
         }
 
-        .btn-primary {
-            background: #3498db;
-            color: white;
-        }
+        /* 按钮颜色 */
+        .btn-primary { background: #3498db; color: white; }
+        .btn-primary:hover { background: #2980b9; }
+        .btn-settings { background: #95a5a6; color: white; }
+        .btn-settings:hover { background: #7f8c8d; }
+        .btn-success { background: #27ae60; color: white; }
+        .btn-success:hover { background: #219150; }
+        .btn-danger { background: #e74c3c; color: white; }
+        .btn-danger:hover { background: #c0392b; }
+        .btn-warning { background: #f39c12; color: white; }
+        .btn-warning:hover { background: #e67e22; }
+        .btn:disabled { opacity: 0.6; cursor: not-allowed; }
 
-        .btn-primary:hover {
-            background: #2980b9;
-        }
-
-        .btn-settings {
-            background: #95a5a6;
-            color: white;
-        }
-
-        .btn-settings:hover {
-            background: #7f8c8d;
-        }
-
-        .btn-success {
-            background: #27ae60;
-            color: white;
-        }
-
-        .btn-success:hover {
-            background: #219150;
-        }
-
-        .btn-danger {
-            background: #e74c3c;
-            color: white;
-        }
-
-        .btn-danger:hover {
-            background: #c0392b;
-        }
-
-        .btn-warning {
-            background: #f39c12;
-            color: white;
-        }
-
-        .btn-warning:hover {
-            background: #e67e22;
-        }
-
-        .btn:disabled {
-            opacity: 0.6;
-            cursor: not-allowed;
-        }
-
+        /* 表格样式 */
         table {
             width: 100%;
             border-collapse: collapse;
@@ -193,6 +167,7 @@
             background: #f1f5f9;
         }
 
+        /* 状态标签 */
         .condition-type {
             padding: 4px 8px;
             border-radius: 4px;
@@ -205,6 +180,7 @@
         .type-percent { background: #d1ecf1; color: #0c5460; }
         .type-amount { background: #fff3cd; color: #856404; }
 
+        /* 提示框 */
         .toast {
             position: fixed;
             top: 20px;
@@ -221,6 +197,7 @@
         .toast.error { background: #dc3545; }
         .toast.warning { background: #ffc107; color: #212529; }
 
+        /* 状态指示器 */
         .status-indicator {
             display: inline-block;
             width: 10px;
@@ -229,14 +206,8 @@
             margin-right: 5px;
         }
 
-        .status-active {
-            background: #28a745;
-            animation: pulse 2s infinite;
-        }
-
-        .status-inactive {
-            background: #dc3545;
-        }
+        .status-active { background: #28a745; animation: pulse 2s infinite; }
+        .status-inactive { background: #dc3545; }
 
         @keyframes pulse {
             0% { opacity: 1; }
@@ -244,10 +215,39 @@
             100% { opacity: 1; }
         }
 
+        /* 搜索结果下拉框样式 */
+        .search-results {
+            position: absolute;
+            top: 100%;
+            left: 0;
+            right: 0;
+            background: white;
+            border: 1px solid #ddd;
+            border-top: none;
+            max-height: 200px;
+            overflow-y: auto;
+            z-index: 1000;
+            display: none;
+            box-shadow: 0 2px 5px rgba(0,0,0,0.1);
+        }
+
+        .search-result-item {
+            padding: 8px;
+            cursor: pointer;
+            border-bottom: 1px solid #eee;
+            font-size: 13px;
+        }
+        
+        .search-result-item:hover {
+            background-color: #f1f5f9;
+        }
+
+        /* 响应式适配 */
         @media (max-width: 768px) {
             .form-row {
                 flex-direction: column;
                 gap: 10px;
+                align-items: stretch; /* 移动端拉伸对齐 */
             }
 
             .container {
@@ -256,6 +256,15 @@
 
             .content {
                 padding: 15px;
+            }
+
+            /* 移动端不需要特殊处理按钮对齐，因为变成了垂直排列 */
+            .add-notification-section .form-col:last-child {
+                display: block;
+            }
+            
+            .add-notification-section .form-col:last-child .btn {
+                width: 100%;
             }
         }
     </style>
@@ -274,7 +283,9 @@
                     <label for="webhookUrl">Webhook 地址</label>
                     <input type="text" id="webhookUrl" class="form-control" placeholder="https://qyapi.weixin.qq.com/cgi-bin/webhook/send?key=xxx">
                 </div>
-                <button class="btn btn-success" onclick="saveWebhook()">保存 Webhook 地址</button>
+                <div class="form-group" style="display: inline-block;">
+                    <button class="btn btn-success" onclick="saveWebhook()">保存 Webhook 地址</button>
+                </div>
             </div>
 
             <div class="section add-notification-section">
@@ -286,7 +297,7 @@
                             <div style="position: relative;">
                                 <input type="text" id="symbol" class="form-control" placeholder="输入代码或名称搜索" autocomplete="off">
                                 <!-- 搜索结果下拉列表 -->
-                                <div id="searchResults" class="search-results" style="position: absolute; top: 100%; left: 0; right: 0; background: white; border: 1px solid #ddd; border-top: none; max-height: 200px; overflow-y: auto; z-index: 1000; display: none; box-shadow: 0 2px 5px rgba(0,0,0,0.1);"></div>
+                                <div id="searchResults" class="search-results"></div>
                             </div>
                         </div>
                     </div>
@@ -308,7 +319,7 @@
                         </div>
                     </div>
                     <div class="form-col">
-                        <div class="form-group" style="margin-bottom: 0;">
+                        <div class="form-group" style="margin-bottom: 0; display: flex; align-items: flex-end; height: 100%;">
                             <button class="btn btn-primary" onclick="addNotification()">添加监控</button>
                         </div>
                     </div>
@@ -317,7 +328,7 @@
 
             <div class="section">
                 <div class="section-title">当前监控列表</div>
-                <div style="display: flex; align-items: center; justify-content: space-between; margin-bottom: 10px;">
+                <div style="display: flex; align-items: center; justify-content: space-between; margin-bottom: 15px;">
                     <div style="display: flex; align-items: center;">
                         <span class="status-indicator status-active"></span>
                         <span>监控状态: 运行中 (每5分钟检查一次)</span>
@@ -462,8 +473,7 @@
             } else {
                 searchResults.innerHTML = results.map(item => {
                     return `
-                        <div class="search-result-item" style="padding: 8px; cursor: pointer; border-bottom: 1px solid #eee; font-size: 13px;"
-                             onclick="selectSymbol('${item.code}', '${item.name.replace(/'/g, "\\'")}')">
+                        <div class="search-result-item" onclick="selectSymbol('${item.code}', '${item.name.replace(/'/g, "\\'")}')">
                             <strong>${item.code}</strong> - ${item.name}
                         </div>
                     `;
