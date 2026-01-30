@@ -1528,7 +1528,7 @@ try:
     import importlib.util
     import os
     # 动态导入stock_module
-    spec = importlib.util.spec_from_file_location("stock_module", os.path.join(BASE_DIR, "stock_module.py"))
+    spec = importlib.util.spec_from_file_location("stock_module", os.path.join(BASE_DIR, "modules", "stock_module.py"))
     stock_module = importlib.util.module_from_spec(spec)
     spec.loader.exec_module(stock_module)
     stock_bp = stock_module.stock_bp

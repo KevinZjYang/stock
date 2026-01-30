@@ -1,5 +1,10 @@
 # fund_trans.py
 from flask import Blueprint, request, jsonify, make_response, send_file
+import sys
+import os
+# 添加上级目录到路径，以便导入 app.py
+sys.path.append(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
+
 from app import (
     load_fund_transactions, calculate_fund_summary,
     import_excel_transactions, export_excel_transactions, app_logger,

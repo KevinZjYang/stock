@@ -1,5 +1,10 @@
 # stock.py
 from flask import Blueprint, request, jsonify, make_response
+import sys
+import os
+# 添加上级目录到路径，以便导入 app.py
+sys.path.append(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
+
 from app import (
     load_stock_watchlist, add_stock_to_watchlist, remove_stock_from_watchlist,
     search_stock_by_code, get_stock_realtime_data, get_stock_realtime_data_batch,
@@ -10,6 +15,11 @@ import sqlite3
 
 def set_setting(key, value):
     """设置值"""
+    import sys
+    import os
+    # 添加上级目录到路径，以便导入 app.py
+    sys.path.append(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
+
     from app import get_db_connection, app_logger
     conn = get_db_connection()
     cursor = conn.cursor()

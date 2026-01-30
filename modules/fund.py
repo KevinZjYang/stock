@@ -1,5 +1,10 @@
 # fund.py
 from flask import Blueprint, request, jsonify, make_response
+import sys
+import os
+# 添加上级目录到路径，以便导入 app.py
+sys.path.append(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
+
 from app import (
     load_fund_watchlist, fetch_fund_price_batch_sync,
     CACHE_EXPIRY, get_setting, set_setting, app_logger
