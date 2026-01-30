@@ -2038,11 +2038,6 @@ def fund_trans_page():
 
 
 # ==================== 价格变动通知功能 ====================
-import threading
-import time
-from datetime import datetime
-import requests as req
-
 # 通知条件表
 def init_notification_db():
     """初始化通知条件表"""
