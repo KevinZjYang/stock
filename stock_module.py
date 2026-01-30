@@ -2,7 +2,7 @@
 from flask import Blueprint, request, jsonify, make_response
 from app import (
     load_stock_watchlist, add_stock_to_watchlist, remove_stock_from_watchlist,
-    search_stock_by_code, get_stock_realtime_data,
+    search_stock_by_code, get_stock_realtime_data, get_stock_realtime_data_batch,
     app_logger, get_db_connection
 )
 
@@ -140,14 +140,21 @@ def get_watchlist_detail():
     if not watchlist:
         return jsonify({'watchlist_details': []})
 
+    # 收集所有股票代码，然后批量获取
+    codes = [item['code'] for item in watchlist]
+    realtime_data_list = get_stock_realtime_data_batch(codes)
+
+    # 将批量获取的数据与数据库数据合并
+    realtime_data_map = {data['symbol']: data for data in realtime_data_list}
+
     watchlist_details = []
     for item in watchlist:
         code = item['code']
         # 在数据库中搜索
         db_results = search_stock_by_code(code)
 
-        # 从API获取实时数据
-        realtime_data = get_stock_realtime_data(code)
+        # 从批量获取的数据中获取实时数据
+        realtime_data = realtime_data_map.get(code)
 
         detail = {
             'code': code,
@@ -171,12 +178,9 @@ def get_stock_prices():
     if not watchlist:
         return jsonify([])
 
-    price_data_list = []
-    for item in watchlist:
-        symbol = item['code']
-        realtime_data = get_stock_realtime_data(symbol)
-        if realtime_data:
-            price_data_list.append(realtime_data)
+    # 收集所有股票代码，然后批量获取
+    symbols = [item['code'] for item in watchlist]
+    price_data_list = get_stock_realtime_data_batch(symbols)
 
     return jsonify(price_data_list)
 
@@ -266,11 +270,8 @@ def get_index_prices():
         # 默认显示上证指数、深证成指和创业板指
         index_codes = ['SH000001', 'SZ399001', 'SZ399006']
 
-    price_data_list = []
-    for code in index_codes:
-        realtime_data = get_stock_realtime_data(code)
-        if realtime_data:
-            price_data_list.append(realtime_data)
+    # 批量获取指数数据
+    price_data_list = get_stock_realtime_data_batch(index_codes)
 
     return jsonify(price_data_list)
 
@@ -301,12 +302,8 @@ def get_batch_data():
     # 合并所有代码
     all_codes = index_codes + stock_codes
 
-    # 获取所有数据
-    price_data_list = []
-    for code in all_codes:
-        realtime_data = get_stock_realtime_data(code)
-        if realtime_data:
-            price_data_list.append(realtime_data)
+    # 批量获取所有数据
+    price_data_list = get_stock_realtime_data_batch(all_codes)
 
     # 分离指数和股票数据
     index_data = [item for item in price_data_list if item['symbol'] in index_codes]

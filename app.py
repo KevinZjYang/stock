@@ -137,27 +137,6 @@ import logging.handlers
 # 确保日志目录存在
 os.makedirs(LOG_DIR, exist_ok=True)
 
-# 配置基础日志记录到文件
-log_formatter = logging.Formatter('%(asctime)s - %(name)s - %(levelname)s - %(message)s')
-
-# 创建文件日志处理器，按天轮转
-file_handler = logging.handlers.TimedRotatingFileHandler(
-    LOG_FILE,
-    when="midnight",
-    interval=1,
-    backupCount=30,  # 保留30天的日志
-    encoding='utf-8'
-)
-file_handler.setFormatter(log_formatter)
-file_handler.setLevel(logging.INFO)
-
-# 配置基础日志记录
-logging.basicConfig(
-    level=logging.INFO,
-    format='%(asctime)s - %(name)s - %(levelname)s - %(message)s',
-    handlers=[file_handler]  # 添加文件处理器
-)
-
 # 全局日志存储
 MAX_LOGS = 1000
 log_storage = deque(maxlen=MAX_LOGS)
@@ -167,7 +146,13 @@ class MemoryLogHandler(logging.Handler):
     """自定义日志处理器，将日志存入内存"""
     def emit(self, record):
         try:
-            page = request.path if request else "System"
+            # 检查是否在请求上下文中
+            try:
+                page = request.path if request else "System"
+            except RuntimeError:
+                # 如果不在请求上下文中，使用默认值
+                page = "System"
+
             func_name = getattr(record, 'funcName', '')
             module_name = getattr(record, 'module', '')
 
@@ -187,16 +172,41 @@ class MemoryLogHandler(logging.Handler):
             # 记录内部错误
             print(f"MemoryLogHandler内部错误: {e}")
 
-logger = logging.getLogger()
-memory_handler = MemoryLogHandler()
-logger.addHandler(memory_handler)
+# 配置日志记录器
+log_formatter = logging.Formatter('%(asctime)s - %(name)s - %(levelname)s - %(message)s')
 
-# 添加控制台处理器以保持控制台输出
+# 创建文件日志处理器，按天轮转
+file_handler = logging.handlers.TimedRotatingFileHandler(
+    LOG_FILE,
+    when="midnight",
+    interval=1,
+    backupCount=30,  # 保留30天的日志
+    encoding='utf-8'
+)
+file_handler.setFormatter(log_formatter)
+file_handler.setLevel(logging.INFO)
+
+# 创建内存日志处理器
+memory_handler = MemoryLogHandler()
+
+# 创建控制台处理器
 console_handler = logging.StreamHandler()
 console_handler.setLevel(logging.INFO)
 console_formatter = logging.Formatter('%(asctime)s - %(name)s - %(levelname)s - %(message)s')
 console_handler.setFormatter(console_formatter)
-logger.addHandler(console_handler)
+
+# 获取根日志记录器并配置处理器
+root_logger = logging.getLogger()
+root_logger.setLevel(logging.INFO)
+
+# 清除任何已有的处理器，避免重复
+for handler in root_logger.handlers[:]:
+    root_logger.removeHandler(handler)
+
+# 添加我们的处理器
+root_logger.addHandler(file_handler)
+root_logger.addHandler(memory_handler)
+root_logger.addHandler(console_handler)
 
 app_logger = logging.getLogger(__name__)
 
@@ -947,14 +957,37 @@ def normalize_stock_code(code: str, market_type: str = None) -> str:
     return normalized_code
 
 def get_stock_realtime_data(code: str) -> Optional[Dict[str, Any]]:
-    """获取股票实时数据"""
+    """获取单个股票实时数据（保留此函数用于兼容性）"""
     try:
         # 标准化代码
         normalized_code = normalize_stock_code(code)
-        app_logger.info(f"开始获取股票实时数据: 原始代码={code}, 标准化后={normalized_code}")
 
-        xueqiu_symbol = get_xueqiu_market_prefix(normalized_code)
-        params = {"symbol": xueqiu_symbol}
+        # 调用批量获取函数，但只传入单个代码
+        result = get_stock_realtime_data_batch([normalized_code])
+        if result and len(result) > 0:
+            return result[0]
+        return None
+    except Exception as e:
+        app_logger.error(f"获取 {code} (雪球) 价格时发生错误: {e}")
+        return None
+
+def get_stock_realtime_data_batch(codes: List[str]) -> List[Dict[str, Any]]:
+    """批量获取股票实时数据"""
+    if not codes:
+        return []
+
+    try:
+        # 标准化所有代码
+        normalized_codes = [normalize_stock_code(code) for code in codes]
+
+        # 获取对应的雪球符号
+        xueqiu_symbols = [get_xueqiu_market_prefix(code) for code in normalized_codes]
+
+        # 打印日志，注意只打印一次
+        app_logger.info(f"开始批量获取股票实时数据: 数量={len(normalized_codes)}, 代码={','.join(normalized_codes[:5])}{'...' if len(normalized_codes) > 5 else ''}")
+
+        # 构建参数，将所有symbol用逗号连接
+        params = {"symbol": ",".join(xueqiu_symbols)}
 
         headers = {
             'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36',
@@ -965,24 +998,15 @@ def get_stock_realtime_data(code: str) -> Optional[Dict[str, Any]]:
         response = requests.get(STOCK_API_URL, params=params, headers=headers, timeout=10)
         response_time = time.time() - start_time
 
-        app_logger.info(f"股票API响应时间: {response_time:.2f}s, 状态码: {response.status_code}, 代码: {normalized_code}")
+        app_logger.info(f"股票API批量响应时间: {response_time:.2f}s, 状态码: {response.status_code}, 代码数量: {len(normalized_codes)}")
 
         response.raise_for_status()
 
         data = response.json()
 
         if not data or 'data' not in data or not data['data']:
-            app_logger.warning(f"股票API返回数据为空: {normalized_code}")
-            return None
-
-        stock_data = data['data'][0]
-
-        price = stock_data.get('current')
-        change = stock_data.get('chg', 0)
-        change_percent = stock_data.get('percent', 0)
-        open_price = stock_data.get('open')
-        high_price = stock_data.get('high')
-        low_price = stock_data.get('low')
+            app_logger.warning(f"股票API批量返回数据为空")
+            return []
 
         # 为特殊指数代码定义名称映射
         index_name_map = {
@@ -1001,49 +1025,78 @@ def get_stock_realtime_data(code: str) -> Optional[Dict[str, Any]]:
             '.INX': '标普500'
         }
 
-        # 从数据库获取股票详细信息
+        # 一次性从数据库获取所有股票信息
         conn = get_db_connection()
         cursor = conn.cursor()
-        cursor.execute('SELECT name, market_type, market_name FROM stocks WHERE code = ?', (normalized_code,))
-        row = cursor.fetchone()
+
+        # 构建SQL查询，使用占位符
+        placeholders = ','.join(['?' for _ in normalized_codes])
+        cursor.execute(f'SELECT code, name, market_type, market_name FROM stocks WHERE code IN ({placeholders})', normalized_codes)
+        stock_rows = {row['code']: dict(row) for row in cursor.fetchall()}
         conn.close()
 
-        # 优先使用数据库中的名称，如果没有则使用映射，最后使用代码本身
-        name = row['name'] if row and row['name'] else index_name_map.get(normalized_code, normalized_code)
+        results = []
+        for stock_data in data['data']:
+            symbol = stock_data.get('symbol')
 
-        # 根据市场类型确定类型标识
-        type_identifier = 'stock'  # 默认类型
-        if row:
-            if row['market_name'] == '大盘指数' or normalized_code in ['000001', '399001', '399006']:
-                type_identifier = 'index'
-            elif row['market_type'] == 'SH':
-                type_identifier = 'sh_stock'
-            elif row['market_type'] == 'SZ':
-                type_identifier = 'sz_stock'
-            elif row['market_type'] == 'HK':
-                type_identifier = 'hk_stock'
-            elif row['market_type'] == 'US':
-                type_identifier = 'us_stock'
-            else:
-                type_identifier = 'stock'
+            # 尝试匹配返回的symbol到我们的标准化代码
+            matched_code = None
+            for norm_code in normalized_codes:
+                if symbol == get_xueqiu_market_prefix(norm_code):
+                    matched_code = norm_code
+                    break
 
-        return {
-            'symbol': normalized_code,
-            'name': name,
-            'market': get_market_type(normalized_code),
-            'type': type_identifier,  # 添加类型字段
-            'price': price,
-            'change': change,
-            'change_percent': change_percent,
-            'open_price': open_price,
-            'high_price': high_price,
-            'low_price': low_price,
-            'currency': 'HKD' if len(normalized_code) == 5 else 'CNY'
-        }
+            if not matched_code:
+                continue  # 如果找不到匹配的代码，跳过这条数据
+
+            price = stock_data.get('current')
+            change = stock_data.get('chg', 0)
+            change_percent = stock_data.get('percent', 0)
+            open_price = stock_data.get('open')
+            high_price = stock_data.get('high')
+            low_price = stock_data.get('low')
+
+            # 获取股票详细信息
+            row = stock_rows.get(matched_code)
+
+            # 优先使用数据库中的名称，如果没有则使用映射，最后使用代码本身
+            name = row['name'] if row and row['name'] else index_name_map.get(matched_code, matched_code)
+
+            # 根据市场类型确定类型标识
+            type_identifier = 'stock'  # 默认类型
+            if row:
+                if row['market_name'] == '大盘指数' or matched_code in ['000001', '399001', '399006']:
+                    type_identifier = 'index'
+                elif row['market_type'] == 'SH':
+                    type_identifier = 'sh_stock'
+                elif row['market_type'] == 'SZ':
+                    type_identifier = 'sz_stock'
+                elif row['market_type'] == 'HK':
+                    type_identifier = 'hk_stock'
+                elif row['market_type'] == 'US':
+                    type_identifier = 'us_stock'
+                else:
+                    type_identifier = 'stock'
+
+            results.append({
+                'symbol': matched_code,
+                'name': name,
+                'market': get_market_type(matched_code),
+                'type': type_identifier,  # 添加类型字段
+                'price': price,
+                'change': change,
+                'change_percent': change_percent,
+                'open_price': open_price,
+                'high_price': high_price,
+                'low_price': low_price,
+                'currency': 'HKD' if len(matched_code) == 5 else 'CNY'
+            })
+
+        return results
 
     except Exception as e:
-        app_logger.error(f"获取 {code} (雪球) 价格时发生错误: {e}")
-        return None
+        app_logger.error(f"批量获取股票价格时发生错误: {e}")
+        return []
 
 # ==================== 指数管理功能 ====================
 def load_index_watchlist() -> List[str]:
@@ -1568,8 +1621,9 @@ except ImportError as e:
         # 在数据库中搜索
         db_results = search_stock_by_code(code)
 
-        # 从API获取实时数据
-        realtime_data = get_stock_realtime_data(code)
+        # 从API获取实时数据 - 使用批量函数但只传入单个代码
+        batch_result = get_stock_realtime_data_batch([code])
+        realtime_data = batch_result[0] if batch_result else None
 
         app_logger.info(f"股票搜索完成: {code}, 结果数量: DB={len(db_results)}, 实时数据={'有' if realtime_data else '无'}")
         return jsonify({
@@ -1587,11 +1641,11 @@ except ImportError as e:
             app_logger.info(f"股票关注列表为空, IP: {client_ip}")
             return jsonify([])
 
-        price_data_list = []
-        for symbol in watchlist:
-            realtime_data = get_stock_realtime_data(symbol)
-            if realtime_data:
-                price_data_list.append(realtime_data)
+        # 提取股票代码列表
+        symbols = [item['code'] if isinstance(item, dict) else item for item in watchlist]
+
+        # 批量获取实时数据
+        price_data_list = get_stock_realtime_data_batch(symbols)
 
         app_logger.info(f"返回 {len(price_data_list)} 个股票价格数据, IP: {client_ip}")
         return jsonify(price_data_list)
