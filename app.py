@@ -1522,136 +1522,6 @@ with app.app_context():
     initialize_app()
 
 
-# ==================== 股票模块路由 ====================
-# 注册股票蓝图
-try:
-    import importlib.util
-    import os
-    # 动态导入stock_module
-    spec = importlib.util.spec_from_file_location("stock_module", os.path.join(BASE_DIR, "modules", "stock_module.py"))
-    stock_module = importlib.util.module_from_spec(spec)
-    spec.loader.exec_module(stock_module)
-    stock_bp = stock_module.stock_bp
-    app.register_blueprint(stock_bp, url_prefix='/api/stock')
-    app_logger.info("成功注册股票蓝图")
-except ImportError as e:
-    app_logger.error(f"导入股票蓝图失败: {e}")
-    # 如果蓝图导入失败，保留旧的路由作为备选
-    @app.route('/api/stock/watchlist', methods=['GET', 'POST', 'DELETE'])
-    def fallback_manage_stock_watchlist():
-        if request.method == 'GET':
-            app_logger.info(f"获取股票关注列表请求来自: {request.remote_addr}")
-            watchlist = load_stock_watchlist()
-            app_logger.info(f"返回股票关注列表，共 {len(watchlist)} 个项目")
-            return jsonify({'watchlist': watchlist})
-
-        elif request.method == 'POST':
-            app_logger.info(f"添加股票到关注列表请求来自: {request.remote_addr}")
-            data = request.get_json()
-            if not data:
-                app_logger.error(f"请求体为空或无法解析JSON: {request.data}")
-                return jsonify({'error': '缺少请求数据'}), 400
-
-            # 尝试从code或symbol字段获取代码
-            code = None
-            if isinstance(data, dict):
-                if 'code' in data:
-                    code = data['code']
-                    app_logger.debug(f"从code字段获取代码: {code}")
-                elif 'symbol' in data:  # 兼容旧版本前端
-                    code = data['symbol']
-                    app_logger.debug(f"从symbol字段获取代码: {code}")
-            else:
-                app_logger.error(f"数据格式错误，期望字典类型，实际类型: {type(data)}")
-                return jsonify({'error': '数据格式错误'}), 400
-
-            if not code:
-                app_logger.warning(f"未找到股票代码，数据内容: {data}")
-                return jsonify({'error': '缺少股票代码'}), 400
-
-            # 确保代码是字符串并去除空白
-            code = str(code).strip()
-            if not code:
-                app_logger.warning(f"股票代码为空字符串")
-                return jsonify({'error': '股票代码不能为空'}), 400
-
-            if add_stock_to_watchlist(code):
-                app_logger.info(f"成功添加股票到关注列表: {code}")
-                # 返回更新后的关注列表
-                updated_watchlist = load_stock_watchlist()
-                return jsonify({'watchlist': updated_watchlist, 'success': True, 'code': code})
-            else:
-                app_logger.warning(f"股票已在关注列表中，无法重复添加: {code}")
-                return jsonify({'error': '股票已在关注列表中'}), 400
-
-        elif request.method == 'DELETE':
-            app_logger.info(f"从关注列表移除股票请求来自: {request.remote_addr}")
-            data = request.get_json()
-            if not data:
-                app_logger.error(f"DELETE请求体为空或无法解析JSON: {request.data}")
-                return jsonify({'error': '缺少请求数据或JSON格式错误'}), 400
-
-            if not isinstance(data, dict) or ('code' not in data and 'symbol' not in data):
-                app_logger.warning(f"DELETE请求缺少code或symbol字段，数据内容: {data}")
-                return jsonify({'error': '缺少股票代码'}), 400
-
-            # 获取代码字段
-            code = data.get('code') or data.get('symbol')
-            code = str(code).strip()
-            if not code:
-                app_logger.warning(f"DELETE请求中股票代码为空")
-                return jsonify({'error': '股票代码不能为空'}), 400
-
-            if remove_stock_from_watchlist(code):
-                app_logger.info(f"成功从关注列表移除股票: {code}")
-                return jsonify({'success': True, 'code': code})
-            else:
-                app_logger.warning(f"股票不在关注列表中，无法移除: {code}")
-                return jsonify({'error': '股票不在关注列表中'}), 400
-
-    @app.route('/api/stock/search', methods=['GET'])
-    def fallback_search_stock():
-        code = request.args.get('code', '').strip()
-        client_ip = request.remote_addr
-        app_logger.info(f"股票搜索请求来自: {client_ip}, 代码: {code}")
-
-        if not code:
-            app_logger.warning(f"股票搜索失败: 缺少股票代码, IP: {client_ip}")
-            return jsonify({'error': '缺少股票代码'}), 400
-
-        # 在数据库中搜索
-        db_results = search_stock_by_code(code)
-
-        # 从API获取实时数据 - 使用批量函数但只传入单个代码
-        batch_result = get_stock_realtime_data_batch([code])
-        realtime_data = batch_result[0] if batch_result else None
-
-        app_logger.info(f"股票搜索完成: {code}, 结果数量: DB={len(db_results)}, 实时数据={'有' if realtime_data else '无'}")
-        return jsonify({
-            'excel_results': db_results,  # 现在是从数据库获取的股票数据
-            'realtime_data': realtime_data
-        })
-
-    @app.route('/api/stock/prices', methods=['GET'])
-    def fallback_get_stock_prices():
-        client_ip = request.remote_addr
-        app_logger.info(f"获取股票价格请求来自: {client_ip}")
-
-        watchlist = load_stock_watchlist()
-        if not watchlist:
-            app_logger.info(f"股票关注列表为空, IP: {client_ip}")
-            return jsonify([])
-
-        # 提取股票代码列表
-        symbols = [item['code'] if isinstance(item, dict) else item for item in watchlist]
-
-        # 批量获取实时数据
-        price_data_list = get_stock_realtime_data_batch(symbols)
-
-        app_logger.info(f"返回 {len(price_data_list)} 个股票价格数据, IP: {client_ip}")
-        return jsonify(price_data_list)
-
-# ==================== 基金模块路由 ====================
 
 # ==================== 基金模块路由 ====================
 data_cache = {'funds': None, 'last_update': 0}
@@ -2024,18 +1894,6 @@ def clear_log_list():
 def index():
     return render_template('master.html')
 
-@app.route('/stock_page')
-def stock_page():
-    return render_template('stock_detail.html')
-
-@app.route('/fund_page')
-def fund_page():
-    return render_template('fund_detail.html')
-
-@app.route('/fund_trans_page')
-def fund_trans_page():
-    return render_template('fund_trans_detail.html')
-
 
 # ==================== 价格变动通知功能 ====================
 # 通知条件表
@@ -2374,89 +2232,57 @@ def notification_monitor():
 # 初始化通知数据库表
 init_notification_db()
 
-# 启动价格通知监控线程
-notification_thread = threading.Thread(target=notification_monitor, daemon=True)
-notification_thread.start()
-
 # 添加API路由
-@app.route('/api/notifications', methods=['GET', 'POST', 'DELETE'])
-def manage_notifications():
-    if request.method == 'GET':
-        notifications = get_price_notifications()
-        return jsonify(notifications)
 
-    elif request.method == 'POST':
-        data = request.get_json()
-        if not data or 'symbol' not in data or 'condition_type' not in data or 'threshold_value' not in data:
-            return jsonify({'error': '缺少必要参数'}), 400
+# 注册API蓝图
+try:
+    from modules.stock_module import stock_bp
+    app.register_blueprint(stock_bp, url_prefix='/api/stock')
+except ImportError:
+    print("Warning: Could not import stock_module blueprint")
 
-        symbol = data['symbol']
-        condition_type = data['condition_type']
-        threshold_value = data['threshold_value']
+try:
+    from modules.fund import fund_bp
+    app.register_blueprint(fund_bp, url_prefix='/api/fund')
+except ImportError:
+    print("Warning: Could not import fund blueprint")
 
-        # 根据股票代码获取股票名称
-        stock_name = ''
-        try:
-            conn = sqlite3.connect(DATABASE_PATH)
-            cursor = conn.cursor()
-            cursor.execute('SELECT name FROM stocks WHERE code = ?', (symbol,))
-            result = cursor.fetchone()
-            if result:
-                stock_name = result[0]
-            conn.close()
-        except Exception as e:
-            app_logger.error(f"获取股票名称失败: {e}")
+try:
+    from modules.fund_trans import fund_trans_bp
+    app.register_blueprint(fund_trans_bp, url_prefix='/api/fund_trans')
+except ImportError:
+    print("Warning: Could not import fund_trans blueprint")
 
-        if add_price_notification(symbol, condition_type, threshold_value, stock_name):
-            return jsonify({'success': True})
-        else:
-            return jsonify({'error': '添加通知条件失败'}), 500
+try:
+    from modules.notify import notify_bp
+    app.register_blueprint(notify_bp)
+except ImportError:
+    print("Warning: Could not import notify blueprint")
 
-    elif request.method == 'DELETE':
-        data = request.get_json()
-        if not data or 'id' not in data:
-            return jsonify({'error': '缺少通知ID'}), 400
+# 注册页面路由
+try:
+    from modules.stock_module import stock_page
+    app.add_url_rule('/stock_page', 'stock_page', stock_page)
+except ImportError:
+    print("Warning: Could not import stock_page route")
 
-        notification_id = data['id']
-        if remove_notification(notification_id):
-            return jsonify({'success': True})
-        else:
-            return jsonify({'error': '删除通知条件失败'}), 500
+try:
+    from modules.fund import fund_page
+    app.add_url_rule('/fund_page', 'fund_page', fund_page)
+except ImportError:
+    print("Warning: Could not import fund_page route")
 
+try:
+    from modules.fund_trans import fund_trans_page
+    app.add_url_rule('/fund_trans_page', 'fund_trans_page', fund_trans_page)
+except ImportError:
+    print("Warning: Could not import fund_trans_page route")
 
-@app.route('/api/webhook', methods=['GET', 'POST'])
-def manage_webhook():
-    if request.method == 'GET':
-        webhook_url = get_webhook_url()
-        return jsonify({'webhook_url': webhook_url})
-
-    elif request.method == 'POST':
-        data = request.get_json()
-        if not data or 'webhook_url' not in data:
-            return jsonify({'error': '缺少webhook地址'}), 400
-
-        webhook_url = data['webhook_url']
-        if set_webhook_url(webhook_url):
-            return jsonify({'success': True})
-        else:
-            return jsonify({'error': '设置webhook地址失败'}), 500
-
-
-@app.route('/notification_page')
-def notification_page():
-    return render_template('notification.html')
-
-
-@app.route('/api/notifications/check_now', methods=['POST'])
-def manual_check_notifications():
-    """手动触发价格通知检查（忽略交易时间限制）"""
-    try:
-        # 直接检查，不考虑交易时间
-        check_price_notifications(trading_hours_only=False)
-        return jsonify({'success': True, 'message': '手动检查完成'})
-    except Exception as e:
-        app_logger.error(f"手动检查价格通知时发生错误: {e}")
-        return jsonify({'success': False, 'error': str(e)}), 500
+try:
+    from modules.notify import notification_page
+    app.add_url_rule('/notification_page', 'notification_page', notification_page)
+except ImportError:
+    print("Warning: Could not import notification_page route")
 
 
 if __name__ == '__main__':

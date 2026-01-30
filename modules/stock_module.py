@@ -1,5 +1,5 @@
 # stock.py
-from flask import Blueprint, request, jsonify, make_response
+from flask import Blueprint, request, jsonify, make_response, render_template
 import sys
 import os
 # 添加上级目录到路径，以便导入 app.py
@@ -15,6 +15,13 @@ import sqlite3
 
 
 stock_bp = Blueprint('stock', __name__)
+
+@stock_bp.route('/detail_page')
+def stock_detail_page():
+    return render_template('stock_detail.html')
+
+def stock_page():
+    return render_template('stock_detail.html')
 
 @stock_bp.route('/watchlist', methods=['GET', 'POST', 'DELETE'])
 def manage_watchlist():

@@ -1,5 +1,5 @@
 # fund_trans.py
-from flask import Blueprint, request, jsonify, make_response, send_file
+from flask import Blueprint, request, jsonify, make_response, render_template, send_file
 import sys
 import os
 # 添加上级目录到路径，以便导入 app.py
@@ -12,6 +12,13 @@ from app import (
 )
 
 fund_trans_bp = Blueprint('fund_trans', __name__)
+
+@fund_trans_bp.route('/detail_page')
+def fund_trans_detail_page():
+    return render_template('fund_trans_detail.html')
+
+def fund_trans_page():
+    return render_template('fund_trans_detail.html')
 
 @fund_trans_bp.route('/transactions', methods=['GET', 'POST', 'PUT', 'DELETE'])
 def manage_transactions():

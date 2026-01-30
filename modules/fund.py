@@ -1,5 +1,5 @@
 # fund.py
-from flask import Blueprint, request, jsonify, make_response
+from flask import Blueprint, request, jsonify, make_response, render_template
 import sys
 import os
 # 添加上级目录到路径，以便导入 app.py
@@ -12,6 +12,13 @@ from app import (
 import time
 
 fund_bp = Blueprint('fund', __name__)
+
+@fund_bp.route('/detail_page')
+def fund_detail_page():
+    return render_template('fund_detail.html')
+
+def fund_page():
+    return render_template('fund_detail.html')
 
 # 缓存
 data_cache = {'funds': None, 'last_update': 0}
