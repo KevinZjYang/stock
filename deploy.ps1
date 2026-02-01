@@ -73,28 +73,65 @@ function Check-Prerequisites {
     Write-Success "所有必要工具都已安装"
 }
 
-# 克隆远程仓库
-function Clone-Repository {
+# 克隆远程仓库或准备本地目录
+function Prepare-SourceCode {
     if (-not $RepoUrl) {
-        Write-Info "跳过克隆步骤，使用本地目录"
+        Write-Info "使用本地目录作为源代码"
+
+        # 检查当前目录是否为项目根目录（包含docker-compose.yml等关键文件）
+        $requiredFiles = @("docker-compose.yml", "Dockerfile", "app.py")
+        $missingFiles = @()
+        foreach ($file in $requiredFiles) {
+            if (-not (Test-Path $file)) {
+                $missingFiles += $file
+            }
+        }
+
+        if ($missingFiles.Count -gt 0) {
+            Write-Warning "当前目录缺少以下关键文件: $($missingFiles -join ', ')"
+            Write-Info "将创建新的项目目录结构"
+
+            # 如果ProjectDir已存在，备份它
+            if (Test-Path $ProjectDir) {
+                Write-Warning "目标目录 $PROJECT_DIR 已存在，正在备份..."
+                $backupName = "${ProjectDir}_backup_$(Get-Date -Format 'yyyyMMdd_HHmmss')"
+                Move-Item $ProjectDir $backupName
+                Write-Success "已备份到 $backupName"
+            }
+
+            # 创建新目录
+            New-Item -ItemType Directory -Path $ProjectDir -Force | Out-Null
+
+            # 复制当前目录的所有内容到新目录
+            Get-ChildItem -Path "." -Exclude $ProjectDir | ForEach-Object {
+                Copy-Item $_.FullName -Destination $ProjectDir -Recurse -Force
+            }
+
+            # 切换到项目目录
+            Set-Location $ProjectDir
+        } else {
+            Write-Info "检测到当前目录包含项目文件，将使用当前目录作为部署源"
+        }
+
         return
     }
-    
+
     Write-Info "正在从 $RepoUrl 克隆仓库到 $ProjectDir..."
-    
+
     if (Test-Path $ProjectDir) {
         Write-Warning "目标目录 $ProjectDir 已存在，正在备份..."
         $backupName = "${ProjectDir}_backup_$(Get-Date -Format 'yyyyMMdd_HHmmss')"
         Move-Item $ProjectDir $backupName
+        Write-Success "已备份到 $backupName"
     }
-    
+
     git clone -b $Branch $RepoUrl $ProjectDir
-    
+
     if ($LASTEXITCODE -ne 0) {
         Write-ErrorCustom "克隆仓库失败"
         exit 1
     }
-    
+
     Write-Success "仓库克隆成功"
 }
 
@@ -182,13 +219,13 @@ function Main {
     Write-Info "开始自动化部署..."
     Write-Info "时间: $(Get-Date)"
     Write-Host ""
-    
+
     Check-Prerequisites
-    Clone-Repository
+    Prepare-SourceCode
     Prepare-DeploymentDir
     Start-Services
     Show-PostDeploymentInfo
-    
+
     Write-Success "部署流程完成！"
 }
 

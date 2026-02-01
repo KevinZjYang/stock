@@ -71,27 +71,66 @@ check_prerequisites() {
     print_success "所有必要工具都已安装"
 }
 
-# 克隆远程仓库
-clone_repository() {
+# 克隆远程仓库或准备本地目录
+prepare_source_code() {
     if [[ -z "$REPO_URL" ]]; then
-        print_info "跳过克隆步骤，使用本地目录"
+        print_info "使用本地目录作为源代码"
+
+        # 检查当前目录是否为项目根目录（包含docker-compose.yml等关键文件）
+        local required_files=("docker-compose.yml" "Dockerfile" "app.py")
+        local missing_files=()
+
+        for file in "${required_files[@]}"; do
+            if [[ ! -f "$file" ]]; then
+                missing_files+=("$file")
+            fi
+        done
+
+        if [[ ${#missing_files[@]} -gt 0 ]]; then
+            print_warning "当前目录缺少以下关键文件: ${missing_files[*]}"
+            print_info "将创建新的项目目录结构"
+
+            # 如果ProjectDir已存在，备份它
+            if [[ -d "$PROJECT_DIR" ]]; then
+                print_warning "目标目录 $PROJECT_DIR 已存在，正在备份..."
+                mv "$PROJECT_DIR" "${PROJECT_DIR}_backup_$(date +%Y%m%d_%H%M%S)"
+                print_success "已备份到 ${PROJECT_DIR}_backup_$(date +%Y%m%d_%H%M%S)"
+            fi
+
+            # 创建新目录并进入
+            mkdir -p "$PROJECT_DIR"
+
+            # 复制当前目录的所有内容到新目录
+            shopt -s dotglob  # 包括隐藏文件
+            cp -r * .* "$PROJECT_DIR"/ 2>/dev/null || true
+            # 删除可能复制过来的备份目录
+            rm -rf "$PROJECT_DIR/${PROJECT_DIR}_backup_"*
+            shopt -u dotglob  # 关闭包括隐藏文件的选项
+
+            # 切换到项目目录
+            cd "$PROJECT_DIR"
+        else
+            print_info "检测到当前目录包含项目文件，将使用当前目录作为部署源"
+        fi
+
         return
     fi
-    
+
     print_info "正在从 $REPO_URL 克隆仓库到 $PROJECT_DIR..."
-    
+
     if [[ -d "$PROJECT_DIR" ]]; then
         print_warning "目标目录 $PROJECT_DIR 已存在，正在备份..."
         mv "$PROJECT_DIR" "${PROJECT_DIR}_backup_$(date +%Y%m%d_%H%M%S)"
+        print_success "已备份到 ${PROJECT_DIR}_backup_$(date +%Y%m%d_%H%M%S)"
     fi
-    
+
     git clone -b "$BRANCH" "$REPO_URL" "$PROJECT_DIR"
-    
+
     if [[ $? -ne 0 ]]; then
         print_error "克隆仓库失败"
         exit 1
     fi
-    
+
     print_success "仓库克隆成功"
 }
 
@@ -199,13 +238,13 @@ main() {
     print_info "开始自动化部署..."
     print_info "时间: $(date)"
     echo ""
-    
+
     check_prerequisites
-    clone_repository
+    prepare_source_code
     prepare_deployment_dir
     start_services
     show_post_deployment_info
-    
+
     print_success "部署流程完成！"
 }
 
