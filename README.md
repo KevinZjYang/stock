@@ -107,6 +107,8 @@
 
 ## 部署
 
+### 方法一：传统部署
+
 ```bash
 # 安装依赖
 pip install -r requirements.txt
@@ -116,6 +118,27 @@ python app.py
 ```
 
 应用默认运行在 `http://0.0.0.0:3333`
+
+### 方法二：Docker 自动化部署（推荐）
+
+使用提供的自动化部署脚本一键部署：
+
+#### Windows (PowerShell):
+```powershell
+# 设置执行策略（首次运行）
+Set-ExecutionPolicy -ExecutionPolicy RemoteSigned -Scope CurrentUser
+
+# 运行部署脚本（默认从 https://github.com/KevinZjYang/stock 克隆）
+.\deploy.ps1
+```
+
+#### Windows (命令提示符):
+```cmd
+# 运行部署脚本（默认从 https://github.com/KevinZjYang/stock 克隆）
+deploy.bat
+```
+
+自动化部署完成后，应用将在 `http://localhost:3333` 上运行。
 
 ## 文件结构
 
