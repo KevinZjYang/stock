@@ -101,7 +101,7 @@
 
 ### 数据库配置
 - 数据库文件: `data/stock_fund.db`
-- Excel数据文件: `data/code.xlsx`
+- Excel数据文件: `basedata/code.xlsx`
 
 ### 日志配置
 - 日志目录: `logs/`
@@ -155,6 +155,7 @@ stock/
 ├── LICENSE              # 许可证
 ├── data/                # 数据文件
 │   ├── stock_fund.db    # SQLite数据库
+├── basedata\            # 基础数据目录
 │   └── code.xlsx        # 股票代码Excel文件
 ├── logs/                # 日志文件
 ├── templates/           # 前端模板
