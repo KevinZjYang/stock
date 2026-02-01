@@ -115,8 +115,8 @@ prepare_source_code() {
                 done
 
                 # 同时移动隐藏文件（除了.和..）
-                for item in "$PROJECT_DIR"/.[^.]*; do
-                    if [[ -n "$item" && "$(basename "$item")" != "." && "$(basename "$item")" != ".." && "$(basename "$item")" != "./data" ]]; then
+                for item in "$PROJECT_DIR"/.*; do
+                    if [[ -e "$item" && "$(basename "$item")" != "." && "$(basename "$item")" != ".." && "$(basename "$item")" != "data" ]]; then
                         mv "$item" "$backup_name/"
                     fi
                 done
@@ -189,8 +189,8 @@ prepare_source_code() {
         done
 
         # 同时移动隐藏文件（除了.和..）
-        for item in "$PROJECT_DIR"/.[^.]*; do
-            if [[ -n "$item" && "$(basename "$item")" != "." && "$(basename "$item")" != ".." && "$(basename "$item")" != "./data" ]]; then
+        for item in "$PROJECT_DIR"/.*; do
+            if [[ -e "$item" && "$(basename "$item")" != "." && "$(basename "$item")" != ".." && "$(basename "$item")" != "data" ]]; then
                 mv "$item" "$backup_name/"
             fi
         done
