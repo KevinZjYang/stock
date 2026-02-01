@@ -96,6 +96,9 @@
 
 ## 配置
 
+### 环境变量配置
+系统支持通过 `.env` 文件进行配置，具体参数见 `.env.example` 文件。
+
 ### 数据库配置
 - 数据库文件: `data/stock_fund.db`
 - Excel数据文件: `data/code.xlsx`
@@ -107,19 +110,7 @@
 
 ## 部署
 
-### 方法一：传统部署
-
-```bash
-# 安装依赖
-pip install -r requirements.txt
-
-# 启动应用
-python app.py
-```
-
-应用默认运行在 `http://0.0.0.0:3333`
-
-### 在线一键部署（无需下载脚本）
+### 在线一键部署（推荐）
 
 直接在命令行中运行以下命令即可开始部署（无需预先下载任何脚本）：
 
@@ -135,6 +126,24 @@ curl -sSL https://raw.githubusercontent.com/KevinZjYang/stock/main/deploy.sh | b
 
 在线部署方式会直接从 GitHub 获取最新的部署脚本并立即执行，无需预先下载到本地。
 现在用户只需要在命令行中输入一个简单的命令，就可以开始部署整个应用，真正实现了"一个链接"启动部署的功能。
+
+### 传统部署方式
+
+如果需要手动部署：
+
+```bash
+# 克隆项目
+git clone https://github.com/KevinZjYang/stock
+cd stock
+
+# 安装依赖（如果直接运行）
+pip install -r requirements.txt
+
+# 启动应用
+python app.py
+```
+
+应用默认运行在 `http://0.0.0.0:3333`
 
 ## 文件结构
 
