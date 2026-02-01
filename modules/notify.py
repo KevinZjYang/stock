@@ -18,7 +18,6 @@ from datetime import datetime, timedelta
 notify_bp = Blueprint('notify', __name__)
 
 # ==================== 价格变动通知功能 ====================
-
 # 从 models 模块导入数据库连接函数
 from modules.models import get_db_connection, DATABASE_PATH
 

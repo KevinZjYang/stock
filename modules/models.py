@@ -1545,7 +1545,7 @@ def restart_application():
             os.kill(os.getpid(), signal.SIGTERM)  # 发送终止信号，让Docker重启容器
             return {"success": True, "message": "已发送重启信号"}
         else:
-            # ������不是在Docker中，尝试使用systemctl或其他方式重启
+            # 不是在Docker中，尝试使用systemctl或其他方式重启
             # 这里可以根据实际部署方式进行调整
             return {"success": True, "message": "请手动重启应用程序以应用更新"}
     except Exception as e:
