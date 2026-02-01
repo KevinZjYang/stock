@@ -1546,3 +1546,106 @@ def check_price_notifications(trading_hours_only=True):
                 app_logger.warning(f"股票 {symbol} 的价格为0，可能是非交易时间或数据不可用")
 
 
+# ==================== 项目更新功能 ====================
+
+def check_for_updates():
+    """检查项目是否有更新"""
+    import subprocess
+    import json
+    try:
+        # 获取远程仓库的最新提交信息
+        result = subprocess.run(['git', 'fetch', 'origin'], capture_output=True, text=True, cwd=os.path.dirname(BASE_DIR))
+        if result.returncode != 0:
+            app_logger.error(f"获取远程仓库信息失败: {result.stderr}")
+            return {"has_update": False, "error": result.stderr}
+
+        # 检查本地和远程的差异
+        result = subprocess.run(['git', 'status', '-uno'], capture_output=True, text=True, cwd=os.path.dirname(BASE_DIR))
+        if result.returncode != 0:
+            app_logger.error(f"检查仓库状态失败: {result.stderr}")
+            return {"has_update": False, "error": result.stderr}
+
+        # 检查是否有需要拉取的更新
+        result = subprocess.run(['git', 'rev-list', 'HEAD..origin/main', '--count'], capture_output=True, text=True, cwd=os.path.dirname(BASE_DIR))
+        if result.returncode != 0:
+            app_logger.error(f"检查更新数量失败: {result.stderr}")
+            return {"has_update": False, "error": result.stderr}
+
+        update_count = int(result.stdout.strip())
+        has_update = update_count > 0
+
+        return {
+            "has_update": has_update,
+            "update_count": update_count,
+            "status": result.stdout.strip()
+        }
+    except Exception as e:
+        app_logger.error(f"检查更新时发生错误: {e}")
+        return {"has_update": False, "error": str(e)}
+
+
+def perform_update():
+    """执行项目更新"""
+    import subprocess
+    import sys
+    import os
+    try:
+        app_logger.info("开始执行项目更新...")
+
+        # 获取当前目录
+        current_dir = os.path.dirname(BASE_DIR)
+
+        # 拉取最新代码
+        result = subprocess.run(['git', 'pull', 'origin', 'main'], capture_output=True, text=True, cwd=current_dir)
+        if result.returncode != 0:
+            app_logger.error(f"拉取代码失败: {result.stderr}")
+            return {"success": False, "error": result.stderr, "output": result.stdout}
+
+        app_logger.info(f"代码拉取成功: {result.stdout}")
+
+        # 重新安装依赖（如果requirements.txt有变化）
+        requirements_path = os.path.join(current_dir, 'requirements.txt')
+        if os.path.exists(requirements_path):
+            result = subprocess.run([sys.executable, '-m', 'pip', 'install', '-r', 'requirements.txt'],
+                                  capture_output=True, text=True, cwd=current_dir)
+            if result.returncode != 0:
+                app_logger.warning(f"依赖安装有警告: {result.stderr}")
+            else:
+                app_logger.info("依赖安装成功")
+
+        # 记录更新时间
+        set_setting('last_update_time', datetime.now().isoformat())
+
+        return {
+            "success": True,
+            "message": "更新成功完成",
+            "output": result.stdout
+        }
+    except Exception as e:
+        app_logger.error(f"执行更新时发生错误: {e}")
+        return {"success": False, "error": str(e)}
+
+
+def restart_application():
+    """重启应用程序"""
+    import subprocess
+    import os
+    try:
+        app_logger.info("尝试重启应用程序...")
+
+        # 如果是在Docker容器中运行，尝试重启服务
+        if os.path.exists('/.dockerenv'):  # 检查是否在Docker容器中
+            # 在Docker中，通常需要重启整个容器
+            app_logger.info("检测到在Docker容器中运行，发送重启信号...")
+            import signal
+            os.kill(os.getpid(), signal.SIGTERM)  # 发送终止信号，让Docker重启容器
+            return {"success": True, "message": "已发送重启信号"}
+        else:
+            # 如���不是在Docker中，尝试使用systemctl或其他方式重启
+            # 这里可以根据实际部署方式进行调整
+            return {"success": True, "message": "请手动重启应用程序以应用更新"}
+    except Exception as e:
+        app_logger.error(f"重启应用程序时发生错误: {e}")
+        return {"success": False, "error": str(e)}
+
+

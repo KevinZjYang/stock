@@ -420,6 +420,11 @@
                     <span class="nav-icon">🔔</span>
                     <span>价格通知管理</span>
                 </li>
+                <!-- 新增：系统更新入口 -->
+                <li class="nav-item" onclick="switchView('update')">
+                    <span class="nav-icon">🔄</span>
+                    <span>系统更新</span>
+                </li>
             </ul>
         </div>
 
@@ -453,6 +458,11 @@
                 <!-- 价格通知管理页面 Iframe -->
                 <div id="notificationWrapper" class="iframe-wrapper">
                     <iframe src="/notification_page" title="价格通知管理" onload="hideLoading()"></iframe>
+                </div>
+
+                <!-- 系统更新页面 Iframe -->
+                <div id="updateWrapper" class="iframe-wrapper">
+                    <iframe src="/update" title="系统更新" onload="hideLoading()"></iframe>
                 </div>
             </div>
         </div>
@@ -496,7 +506,8 @@
                 'stock': '股票监控',
                 'fund': '基金查询',
                 'fund_trans': '基金交易管理',
-                'notification': '价格通知管理'
+                'notification': '价格通知管理',
+                'update': '系统更新'
             };
             document.getElementById('viewTitle').textContent = titleMap[view];
 

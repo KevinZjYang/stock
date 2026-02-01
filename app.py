@@ -149,5 +149,36 @@ except ImportError as e:
     print(f"Warning: Could not import notification_page route: {e}")
 
 
+# ==================== 更新功能路由 ====================
+try:
+    from modules.models import check_for_updates, perform_update, restart_application
+
+    @app.route('/api/update/check', methods=['GET'])
+    def api_check_update():
+        """检查是否有更新"""
+        result = check_for_updates()
+        return jsonify(result)
+
+    @app.route('/api/update/perform', methods=['POST'])
+    def api_perform_update():
+        """执行更新"""
+        result = perform_update()
+        return jsonify(result)
+
+    @app.route('/api/update/restart', methods=['POST'])
+    def api_restart_app():
+        """重启应用"""
+        result = restart_application()
+        return jsonify(result)
+
+    @app.route('/update')
+    def update_page():
+        """更新页面"""
+        return render_template('update.html')
+
+except ImportError as e:
+    print(f"Warning: Could not import update functions: {e}")
+
+
 if __name__ == '__main__':
     app.run(debug=True, host='0.0.0.0', port=3333)
