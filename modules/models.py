@@ -54,6 +54,10 @@ class MemoryLogHandler(logging.Handler):
             try:
                 from flask import request
                 page = request.path if request else "System"
+
+                # 过滤掉特定的请求路径，防止日志循环记录
+                if page == '/api/log/list':
+                    return  # 不记录日志列表请求，避免循环
             except RuntimeError:
                 # 如果不在请求上下文中，使用默认值
                 page = "System"
