@@ -38,22 +38,24 @@ print_error() {
 # 检查必要工具
 check_prerequisites() {
     print_info "检查必要工具..."
-    
+
     if ! command -v docker &> /dev/null; then
         print_error "Docker 未安装，请先安装 Docker"
         exit 1
     fi
-    
-    if ! command -v docker-compose &> /dev/null; then
+
+    # 检查 docker compose (新版本) 或 docker-compose (旧版本)
+    if ! command -v docker-compose &> /dev/null && ! (docker --help | grep -q "compose"); then
         print_error "Docker Compose 未安装，请先安装 Docker Compose"
+        print_info "提示: 新版本的 Docker 已将 compose 集成到 docker 命令中"
         exit 1
     fi
-    
+
     if [[ -n "$REPO_URL" ]] && ! command -v git &> /dev/null; then
         print_error "Git 未安装，无法从远程仓库克隆代码"
         exit 1
     fi
-    
+
     print_success "所有必要工具都已安装"
 }
 
@@ -86,12 +88,12 @@ prepare_deployment_dir() {
     if [[ -n "$REPO_URL" ]]; then
         cd "$PROJECT_DIR"
     fi
-    
+
     print_info "正在准备部署目录..."
-    
+
     # 确保必要的目录存在
     mkdir -p data logs templates
-    
+
     # 如果存在自定义的 compose 文件，则复制到当前目录
     if [[ "$COMPOSE_FILE" != "docker-compose.yml" ]] && [[ -f "$COMPOSE_FILE" ]]; then
         cp "$COMPOSE_FILE" docker-compose.yml
@@ -99,37 +101,53 @@ prepare_deployment_dir() {
         print_error "找不到 docker-compose.yml 文件"
         exit 1
     fi
-    
+
     # 检查是否有 .env 文件，如果没有则创建示例
     if [[ ! -f ".env" ]] && [[ -f ".env.example" ]]; then
         print_info "创建 .env 文件..."
         cp .env.example .env
         print_warning "请检查 .env 文件并根据需要进行配置"
     fi
-    
+
     print_success "部署目录准备完成"
+}
+
+# 检测并确定使用的 docker compose 命令
+detect_docker_compose_cmd() {
+    if command -v docker-compose &> /dev/null; then
+        echo "docker-compose"
+    elif docker --help | grep -q "compose"; then
+        echo "docker compose"
+    else
+        print_error "Docker Compose 未安装"
+        exit 1
+    fi
 }
 
 # 构建并启动服务
 start_services() {
+    # 检测 docker compose 命令
+    DOCKER_COMPOSE_CMD=$(detect_docker_compose_cmd)
+    print_info "使用命令: $DOCKER_COMPOSE_CMD"
+
     print_info "正在构建并启动服务..."
-    
+
     # 停止现有服务（如果存在）
-    if docker-compose ps &> /dev/null; then
+    if eval "$DOCKER_COMPOSE_CMD ps" &> /dev/null; then
         print_info "停止现有服务..."
-        docker-compose down
+        eval "$DOCKER_COMPOSE_CMD down"
     fi
-    
+
     # 构建并启动服务
-    docker-compose up -d --build
-    
+    eval "$DOCKER_COMPOSE_CMD up -d --build"
+
     if [[ $? -eq 0 ]]; then
         print_success "服务启动成功！"
         echo ""
         echo -e "${GREEN}应用正在运行在 http://localhost:3333${NC}"
         echo ""
         print_info "服务状态："
-        docker-compose ps
+        eval "$DOCKER_COMPOSE_CMD ps"
     else
         print_error "服务启动失败"
         exit 1
@@ -138,6 +156,15 @@ start_services() {
 
 # 显示部署后信息
 show_post_deployment_info() {
+    # 检测 docker compose 命令
+    if command -v docker-compose &> /dev/null; then
+        COMPOSE_CMD="docker-compose"
+    elif docker --help | grep -q "compose"; then
+        COMPOSE_CMD="docker compose"
+    else
+        COMPOSE_CMD="docker-compose"  # 默认值
+    fi
+
     echo ""
     echo -e "${GREEN}================================${NC}"
     echo -e "${GREEN}部署完成！${NC}"
@@ -148,10 +175,10 @@ show_post_deployment_info() {
     echo "日志目录: $(pwd)/logs"
     echo ""
     echo "常用命令："
-    echo "  查看服务状态: docker-compose ps"
-    echo "  查看服务日志: docker-compose logs -f"
-    echo "  停止服务: docker-compose down"
-    echo "  重启服务: docker-compose restart"
+    echo "  查看服务状态: $COMPOSE_CMD ps"
+    echo "  查看服务日志: $COMPOSE_CMD logs -f"
+    echo "  停止服务: $COMPOSE_CMD down"
+    echo "  重启服务: $COMPOSE_CMD restart"
     echo ""
 }
 
