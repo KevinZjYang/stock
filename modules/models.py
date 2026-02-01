@@ -589,6 +589,36 @@ def clear_all_fund_transactions():
     conn.commit()
     conn.close()
 
+def save_fund_transactions(transactions):
+    """保存基金交易记录列表到数据库"""
+    conn = get_db_connection()
+    cursor = conn.cursor()
+
+    try:
+        # 先清空现有数据
+        cursor.execute('DELETE FROM fund_transactions')
+
+        # 批量插入新数据
+        for transaction in transactions:
+            cursor.execute('''
+                INSERT INTO fund_transactions
+                (date, name, code, actual_amount, trade_amount, shares, price, fee, type, note)
+                VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+            ''', (
+                transaction.get('date'), transaction.get('name'), transaction.get('code'),
+                transaction.get('actual_amount'), transaction.get('trade_amount'), transaction.get('shares'),
+                transaction.get('price'), transaction.get('fee'), transaction.get('type'), transaction.get('note')
+            ))
+
+        conn.commit()
+        conn.close()
+        app_logger.info(f"成功保存 {len(transactions)} 条基金交易记录")
+        return True
+    except Exception as e:
+        conn.close()
+        app_logger.error(f"保存基金交易记录失败: 错误={e}")
+        return False
+
 def calculate_fund_summary(transactions):
     """计算基金交易汇总数据"""
     if not transactions:
@@ -1419,132 +1449,6 @@ def load_excel_data_to_db():
 
     except Exception as e:
         app_logger.error(f"导入Excel数据到数据库失败: {e}")
-
-# ==================== 价格变动通知功能 ====================
-
-
-
-
-
-
-
-
-
-
-def check_price_notifications(trading_hours_only=True):
-    """检查价格通知条件"""
-    app_logger.info("开始检查价格通知条件")
-
-    if trading_hours_only and not is_trading_time():
-        app_logger.info("非交易时间，跳过检查")
-        return
-
-    notifications = get_price_notifications()
-    if not notifications:
-        app_logger.info("没有需要检查的通知条件")
-        return
-
-    app_logger.info(f"发现 {len(notifications)} 个待检查的通知条件")
-
-    # 获取所有需要检查的股票代码
-    symbols = list(set([n['symbol'] for n in notifications]))
-    app_logger.info(f"需要检查的股票代码: {symbols}")
-
-    # 批量获取实时数据
-    try:
-        # 使用现有的批量获取方法，与股票页面使用相同的方法
-        price_data_list = get_stock_realtime_data_batch(symbols)
-        app_logger.info(f"获取到 {len(price_data_list)} 个股票的实时数据")
-
-        # 直接使用返回的数据构建映射，使用symbol字段作为key
-        price_data_map = {data['symbol']: data for data in price_data_list}
-        app_logger.info(f"构建价格数据映射: {list(price_data_map.keys())}")
-    except Exception as e:
-        app_logger.error(f"获取实时数据失败: {e}")
-        return
-
-    # 检查每个通知条件
-    for notification in notifications:
-        symbol = notification['symbol']
-        condition_type = notification['condition_type']
-        threshold_value = notification['threshold_value']
-        name = notification['name']
-
-        app_logger.info(f"检查通知条件: {symbol} ({name}), 类型: {condition_type}, 阈值: {threshold_value}")
-
-        # 直接使用原始代码进行匹配，因为API返回的就是原始代码格式
-        if symbol not in price_data_map:
-            app_logger.warning(f"无法获取 {symbol} 的实时数据")
-            continue
-
-        current_data = price_data_map[symbol]
-        current_price = current_data.get('price', 0)
-        current_chg = current_data.get('change', 0)
-        current_percent = current_data.get('change_percent', 0)
-
-        app_logger.info(f"股票 {symbol} 当前价格: {current_price}, 涨跌额: {current_chg}, 涨跌幅: {current_percent}%")
-
-        # 检查是否满足条件
-        condition_met = False
-        condition_desc = ""
-
-        if condition_type == 'above_price':
-            app_logger.info(f"检查价格条件: {current_price} >= {threshold_value}? {current_price >= threshold_value}")
-            if current_price >= threshold_value:
-                condition_met = True
-                condition_desc = f"价格达到或超过 {threshold_value} 元"
-        elif condition_type == 'below_price':
-            app_logger.info(f"检查价格条件: {current_price} <= {threshold_value}? {current_price <= threshold_value}")
-            if current_price <= threshold_value:
-                condition_met = True
-                condition_desc = f"价格跌至或低于 {threshold_value} 元"
-        elif condition_type == 'change_percent':
-            app_logger.info(f"检查涨跌幅条件: abs({current_percent}) >= abs({threshold_value})? {abs(current_percent)} >= {abs(threshold_value)}")
-            if abs(current_percent) >= abs(threshold_value):
-                condition_satisfied = (threshold_value > 0 and current_percent >= threshold_value) or \
-                                     (threshold_value < 0 and current_percent <= threshold_value)
-                app_logger.info(f"方向判断: ({threshold_value} > 0 and {current_percent} >= {threshold_value}) or ({threshold_value} < 0 and {current_percent} <= {threshold_value}) = {condition_satisfied}")
-                if condition_satisfied:
-                    condition_met = True
-                    direction = "上涨" if threshold_value > 0 else "下跌"
-                    condition_desc = f"{direction}{abs(threshold_value)}%"
-        elif condition_type == 'change_amount':
-            app_logger.info(f"检查涨跌额条件: abs({current_chg}) >= abs({threshold_value})? {abs(current_chg)} >= {abs(threshold_value)}")
-            if abs(current_chg) >= abs(threshold_value):
-                condition_satisfied = (threshold_value > 0 and current_chg >= threshold_value) or \
-                                     (threshold_value < 0 and current_chg <= threshold_value)
-                app_logger.info(f"方向判断: ({threshold_value} > 0 and {current_chg} >= {threshold_value}) or ({threshold_value} < 0 and {current_chg} <= {threshold_value}) = {condition_satisfied}")
-                if condition_satisfied:
-                    condition_met = True
-                    direction = "上涨" if threshold_value > 0 else "下跌"
-                    condition_desc = f"{direction}{abs(threshold_value)} 元"
-
-        if condition_met:
-            app_logger.info(f"条件满足！准备发送通知: {symbol}")
-            # 发送通知
-            stock_name = current_data.get('name', symbol)
-            message = f"【价格提醒】{stock_name} ({symbol})\n" \
-                     f"条件: {condition_desc}\n" \
-                     f"当前价格: {current_price}\n" \
-                     f"涨跌额: {current_data.get('chg', 0)}\n" \
-                     f"涨跌����: {current_data.get('percent', 0)}%\n" \
-                     f"时间: {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}"
-
-            app_logger.info(f"准备发送消息: {message}")
-
-            if send_wechat_work_message(message):
-                # 标记通知已发送并删除监控
-                mark_notification_sent(notification['id'])
-                app_logger.info(f"价格通知已发送并标记完成: {symbol}")
-            else:
-                app_logger.error(f"价格通知发送失败: {symbol}")
-        else:
-            app_logger.info(f"条件未满足，继续下一个: {symbol}")
-
-            # 特别处理价格为0的情况，这可能表示数据不可用
-            if current_price == 0 and condition_type in ['above_price', 'below_price']:
-                app_logger.warning(f"股票 {symbol} 的价格为0，可能是非交易时间或数据不可用")
-
 
 # ==================== 项目更新功能 ====================
 
