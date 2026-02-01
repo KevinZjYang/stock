@@ -323,11 +323,11 @@
                 <div style="margin-bottom: 15px;">
                     <div style="margin-bottom: 10px;">
                         <strong>时间段选择：</strong>
-                        <button class="btn btn-sm" id="period1M" onclick="setPeriod('1M')">一个月</button>
+                        <button class="btn btn-sm" id="period1M" onclick="setPeriod('1M')" style="background: #3498db; color: white;">一个月</button>
                         <button class="btn btn-sm" id="period3M" onclick="setPeriod('3M')">三个月</button>
                         <button class="btn btn-sm" id="period6M" onclick="setPeriod('6M')">半年</button>
                         <button class="btn btn-sm" id="period1Y" onclick="setPeriod('1Y')">一年</button>
-                        <button class="btn btn-sm" id="periodALL" onclick="setPeriod('ALL')" style="background: #3498db; color: white;">成立以来</button>
+                        <button class="btn btn-sm" id="periodALL" onclick="setPeriod('ALL')">成立以来</button>
                     </div>
                     <div id="fundChartContainer" style="height: 400px; margin-bottom: 20px;">
                         <canvas id="fundChart"></canvas>
@@ -1029,7 +1029,7 @@
 
                     // 缓存中没有净值走势图数据，发起请求获取详细数据
                     try {
-                        const response = await fetch(`/api/fund/detail?code=${code}&period=${currentPeriod}`);
+                        const response = await fetch(`/api/fund/detail?code=${code}&period=${requestPeriod}`);
                         if (!response.ok) {
                             throw new Error(`HTTP ${response.status}`);
                         }
@@ -1124,7 +1124,7 @@
 
                 // 缓存中完全没有该基金的数据，发起请求
                 try {
-                    const response = await fetch(`/api/fund/detail?code=${code}&period=${currentPeriod}`);
+                    const response = await fetch(`/api/fund/detail?code=${code}&period=${requestPeriod}`);
                     if (!response.ok) {
                         throw new Error(`HTTP ${response.status}`);
                     }
@@ -1424,8 +1424,10 @@
             }
         }
 
-        // 当前时间段，默认为成立以来
-        let currentPeriod = 'ALL';
+        // 当前时间段，默认为一个月（仅用于前端显示，API请求仍使用ALL获取所有数据）
+        let currentPeriod = '1M';
+        // 请求时间段，始终为ALL以获取所有可用数据
+        let requestPeriod = 'ALL';
 
         // 设置时间段
         function setPeriod(period) {
