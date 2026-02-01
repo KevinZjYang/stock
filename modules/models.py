@@ -1466,14 +1466,8 @@ def check_for_updates():
         repo_owner = repo_info.get('owner', 'KevinZjYang')  # 实际用户名
         repo_name = repo_info.get('name', 'stock')  # 实际仓库名
 
-        # 构建API URL
+        # 构建API URL来获取仓库的最新提交信息
         repo_url = f"https://api.github.com/repos/{repo_owner}/{repo_name}/commits/main"
-
-        # 或者检查一个版本文件
-        version_check_urls = [
-            f"https://raw.githubusercontent.com/{repo_owner}/{repo_name}/main/VERSION",
-            f"https://raw.githubusercontent.com/{repo_owner}/{repo_name}/main/version.txt"
-        ]
 
         # 检查本地版本信息（如果存在）
         local_version_file = os.path.join(os.path.dirname(BASE_DIR), 'VERSION')
@@ -1482,31 +1476,39 @@ def check_for_updates():
             with open(local_version_file, 'r', encoding='utf-8') as f:
                 current_version = f.read().strip()
 
-        # 尝试获取远程版本信息
-        remote_version = None
-        for url in version_check_urls:
-            try:
-                response = requests.get(url, timeout=10)
-                if response.status_code == 200:
-                    remote_version = response.text.strip()
-                    break
-            except:
-                continue  # 尝试下一个URL
+        try:
+            # 通过GitHub API获取远程仓库的最新提交SHA
+            response = requests.get(repo_url, timeout=10)
+            if response.status_code == 200:
+                remote_data = response.json()
+                remote_commit_sha = remote_data.get('sha', '')[:8]  # 获取前8位作为版本标识
 
-        # 如果无法获取远程版本，返回无更新
-        if remote_version is None:
-            app_logger.warning("无法获取远程版本信息，假定无更新")
-            return {"has_update": False, "message": "无法获取远程版本信息"}
+                # 检查本地是否有记录的最新远程commit SHA
+                last_remote_commit = get_setting('last_remote_commit', '')
 
-        # 比较版本（简单字符串比较，实际应使用语义化版本比较）
-        has_update = remote_version != current_version
+                # 比较远程commit SHA与本地记录的SHA
+                has_update = remote_commit_sha != last_remote_commit
 
-        return {
-            "has_update": has_update,
-            "current_version": current_version,
-            "remote_version": remote_version,
-            "message": f"发现新版本: {remote_version}" if has_update else "已是最新版本"
-        }
+                # 更新本地记录的远程commit SHA
+                set_setting('last_remote_commit', remote_commit_sha)
+
+                return {
+                    "has_update": has_update,
+                    "current_version": current_version,
+                    "remote_version": remote_commit_sha,
+                    "message": f"发现新版本: {remote_commit_sha}" if has_update else "已是最新版本",
+                    "last_commit_date": remote_data.get('commit', {}).get('author', {}).get('date', '')
+                }
+            else:
+                app_logger.warning(f"无法获取远程仓库信息: HTTP {response.status_code}")
+                return {"has_update": False, "message": f"无法获取远程仓库信息: HTTP {response.status_code}"}
+        except requests.RequestException as e:
+            app_logger.error(f"网络请求失败: {e}")
+            return {"has_update": False, "message": f"网络请求失败: {e}"}
+        except Exception as e:
+            app_logger.error(f"解析远程仓库信息失败: {e}")
+            return {"has_update": False, "message": f"解析远程仓库信息失败: {e}"}
+
     except Exception as e:
         app_logger.error(f"检查更新时发生错误: {e}")
         return {"has_update": False, "error": str(e)}
@@ -1556,6 +1558,26 @@ def perform_update():
                 if extracted_dirs:
                     extracted_root = os.path.join(temp_extract_dir, extracted_dirs[0])
 
+                    # 备份当前运行的应用程序（除了特定目录）
+                    backup_dir = os.path.join(current_dir, f"backup_{datetime.now().strftime('%Y%m%d_%H%M%S')}")
+                    os.makedirs(backup_dir, exist_ok=True)
+
+                    # 复制当前项目文件到备份目录（除了排除的目录）
+                    for item in os.listdir(current_dir):
+                        src_path = os.path.join(current_dir, item)
+                        dst_path = os.path.join(backup_dir, item)
+
+                        # 跳过一些不应备份的目录
+                        if item in ['.git', '__pycache__', 'data', 'logs', 'venv', 'env', '.gitignore', '.env', 'config.json', 'backup_*']:
+                            continue
+
+                        if os.path.isdir(src_path):
+                            shutil.copytree(src_path, dst_path)
+                        else:
+                            shutil.copy2(src_path, dst_path)
+
+                    app_logger.info(f"已创建备份: {backup_dir}")
+
                     # 将关键文件从新版本复制到当前目录（排除不需要覆盖的文件）
                     for item in os.listdir(extracted_root):
                         src_path = os.path.join(extracted_root, item)
@@ -1566,11 +1588,26 @@ def perform_update():
                             continue
 
                         if os.path.isdir(src_path):
-                            # 如果目标目录存在，先删除它
+                            # 如果目标目录存在，先删除它（但保留重要的用户数据目录）
                             if os.path.exists(dst_path):
-                                shutil.rmtree(dst_path)
-                            # 复制整个目录
-                            shutil.copytree(src_path, dst_path)
+                                if item in ['data', 'logs', 'basedata']:  # 保留用户数据
+                                    # 合并目录内容，保留原有数据
+                                    for sub_item in os.listdir(src_path):
+                                        sub_src_path = os.path.join(src_path, sub_item)
+                                        sub_dst_path = os.path.join(dst_path, sub_item)
+
+                                        if os.path.isdir(sub_src_path):
+                                            # 递归合并子目录
+                                            if os.path.exists(sub_dst_path):
+                                                shutil.rmtree(sub_dst_path)
+                                            shutil.copytree(sub_src_path, sub_dst_path)
+                                        else:
+                                            shutil.copy2(sub_src_path, sub_dst_path)
+                                else:
+                                    shutil.rmtree(dst_path)
+                                    shutil.copytree(src_path, dst_path)
+                            else:
+                                shutil.copytree(src_path, dst_path)
                         else:
                             # 复制文件
                             shutil.copy2(src_path, dst_path)
