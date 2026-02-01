@@ -45,7 +45,19 @@ check_prerequisites() {
     fi
 
     # 检查 docker compose (新版本) 或 docker-compose (旧版本)
-    if ! command -v docker-compose &> /dev/null && ! (docker --help | grep -q "compose"); then
+    DOCKER_COMPOSE_AVAILABLE=false
+
+    # 检查经典 docker-compose 命令
+    if command -v docker-compose &> /dev/null; then
+        DOCKER_COMPOSE_AVAILABLE=true
+    fi
+
+    # 检查集成的 docker compose 命令
+    if docker --help | grep -q "compose" 2>/dev/null; then
+        DOCKER_COMPOSE_AVAILABLE=true
+    fi
+
+    if [ "$DOCKER_COMPOSE_AVAILABLE" = false ]; then
         print_error "Docker Compose 未安装，请先安装 Docker Compose"
         print_info "提示: 新版本的 Docker 已将 compose 集成到 docker 命令中"
         exit 1
