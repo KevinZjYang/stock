@@ -326,7 +326,8 @@ def get_fund_detail():
 
                 app_logger.info(f"基金详情API响应: {detail_response_data.get('code', 'NO_CODE')}")
 
-                if detail_response_data.get('code') == 0 and detail_response_data.get('data'):
+                # 检查API响应是否成功 - 根据实际API响应格式调整
+                if detail_response_data.get('code') == 200 and detail_response_data.get('data'):
                     fund_detail_data = detail_response_data['data'][0]
 
                     # 添加净值走势图数据

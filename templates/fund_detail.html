@@ -746,10 +746,8 @@
                 <td id="lastYearGrowth-${code}">--</td>
                 <td><button class="btn btn-danger btn-sm" onclick="deleteFund('${code}')">删除</button></td>
             `;
-            // 添加点击事件监听器
-            row.querySelector(`#name-${code}`).addEventListener('click', function() {
-                showFundDetail(code);
-            });
+            // 添加点击事件监听器（使用事件委托避免重复绑定）
+            // 不在此处添加监听器，而是在表格行创建后统一处理
             tbody.appendChild(row);
         }
 
@@ -758,6 +756,23 @@
             if (!tbody) return;
             tbody.innerHTML = '';
             fundWatchlist.forEach(code => createRow(code));
+
+            // 为表格主体添加事件监听器（事件委托）
+            tbody.removeEventListener('click', handleFundNameClick); // 移除可能已存在的监听器
+            tbody.addEventListener('click', handleFundNameClick);
+        }
+
+        // 处理基金名称点击事件（使用事件委托）
+        function handleFundNameClick(event) {
+            // 检查点击的是否是基金名称单元格
+            if (event.target && event.target.matches && event.target.matches('[id^="name-"]')) {
+                // 从ID中提取基金代码
+                const id = event.target.id;
+                const code = id.substring('name-'.length);
+                if (code) {
+                    showFundDetail(code);
+                }
+            }
         }
 
         function updateRow(priceData) {
@@ -768,15 +783,10 @@
             const nameCell = document.getElementById(`name-${code}`);
             if (nameCell) {
                 nameCell.textContent = priceData.name || '--';
-                // 确保点击事件仍然有效
-                if (!nameCell.onclick) {
-                    nameCell.style.cursor = 'pointer';
-                    nameCell.style.color = '#3498db';
-                    nameCell.style.textDecoration = 'underline';
-                    nameCell.addEventListener('click', function() {
-                        showFundDetail(code);
-                    });
-                }
+                // 设置样式，但不添加事件监听器（使用事件委托）
+                nameCell.style.cursor = 'pointer';
+                nameCell.style.color = '#3498db';
+                nameCell.style.textDecoration = 'underline';
             }
 
             const typeCell = document.getElementById(`type-${code}`);
@@ -1414,15 +1424,6 @@
             }
         }
 
-        // 修改表格行点击事件，添加查看详情功能
-        // 为表格行添加点击事件监听器
-        document.addEventListener('click', function(e) {
-            // 查找是否点击了基金代码单元格
-            if (e.target && e.target.id && e.target.id.startsWith('name-')) {
-                const code = e.target.id.replace('name-', '');
-                showFundDetail(code);
-            }
-        });
     </script>
 </body>
 </html>
