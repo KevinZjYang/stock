@@ -1,145 +1,149 @@
 # 股票基金监控系统
 
-一个基于 Flask 的股票和基金实时监控系统，支持多市场数据获取、价格提醒、交易记录管理等功能。
-
-## 项目简介
-
-这是一个功能丰富的投资辅助工具，旨在帮助投资者实时监控股票和基金的价格变动，提供价格提醒功能，并支持基金交易记录的管理和收益统计分析。系统支持A股、港股、美股等多个市场，具有直观的Web界面和灵活的配置选项。
+一个基于Flask开发的股票和基金监控系统，支持实时价格监控、基金投资跟踪、价格变动通知等功能。
 
 ## 功能特性
 
-- **多市场股票监控**：支持A股、港股、美股及各大指数的实时价格监控
-- **基金净值追踪**：实时获取基金单位净值、估算净值及各项收益率指标
-- **智能价格提醒**：设置价格变动提醒，支持价格阈值、涨跌幅等多种条件
-- **企业微信通知**：价格变动时自动推送企业微信消息提醒
-- **基金交易记录管理**：完整的基金买卖记录录入、编辑、删除功能
-- **Excel导入导出**：支持交易记录的Excel批量导入和导出
-- **收益统计分析**：自动计算持仓成本、已实现收益、费用统计等
-- **数据缓存机制**：优化API调用频率，提升响应速度
-- **响应式界面**：适配桌面和移动设备的现代化UI设计
+- **股票监控**：实时监控股票价格变动
+- **基金监控**：实时监控基金净值变动
+- **基金投资跟踪**：记录和跟踪基金投资交易
+- **价格变动通知**：设置价格变动提醒，支持企业微信机器人推送
+- **日志系统**：完整的系统日志记录和查看
+- **指数监控**：监控主要股市指数
 
-## 安装说明
+## 项目架构
 
-### 环境要求
+### 模块划分
 
-- Python 3.7+
-- Windows/Linux/macOS
+项目采用模块化设计，各功能模块职责明确：
 
-### 安装步骤
+#### 1. 核心模块 (`app.py`)
+- 应用入口点
+- 蓝图注册中心
+- 主页路由
 
-1. 克隆项目到本地：
-   ```bash
-   git clone https://github.com/yourusername/stock.git
-   cd stock
-   ```
+#### 2. 数据模型 (`modules/models.py`)
+- 数据库初始化和管理
+- 通用工具函数
+- 日志基础设施
+- 股票/基金数据服务
 
-2. 创建虚拟环境（推荐）：
-   ```bash
-   python -m venv venv
-   # Windows
-   venv\Scripts\activate
-   # Linux/macOS
-   source venv/bin/activate
-   ```
+#### 3. 股票模块 (`modules/stock_module.py`)
+- 股票相关API路由
+- 股票关注列表管理
+- 股票实时数据获取
 
-3. 安装依赖包：
-   ```bash
-   pip install -r requirements.txt
-   ```
+#### 4. 基金模块 (`modules/fund.py`)
+- 基金相关API路由
+- 基金关注列表管理
+- 基金实时数据获取
+- 指数相关功能
 
-4. 启动应用：
-   ```bash
-   python app.py
-   ```
+#### 5. 基金交易模块 (`modules/fund_trans.py`)
+- 基金交易记录管理
+- 交易数据导入/导出
+- 投资收益统计
 
-5. 打开浏览器访问 `http://localhost:3333`
+#### 6. 通知模块 (`modules/notify.py`)
+- 价格变动通知设置
+- 企业微信机器人集成
+- 通知条件管理
+- 通知监控线程
 
-## 使用说明
+#### 7. 日志模块 (`modules/log.py`)
+- 系统日志API路由
+- 日志查看和清理
 
-### 股票监控
+## 技术栈
 
-1. 在股票页面输入股票代码或名称进行搜索
-2. 从搜索结果中选择目标股票并点击"添加"
-3. 股票将被添加到关注列表，实时显示价格变动
-4. 可以随时删除不再关注的股票
+- **后端框架**: Flask
+- **数据库**: SQLite
+- **前端模板**: Jinja2
+- **HTTP库**: Requests
+- **数据处理**: Pandas
 
-### 基金监控
+## API 接口
 
-1. 在基金页面输入基金代码或名称进行搜索
-2. 从搜索结果中选择目标基金并点击"添加"
-3. 基金将被添加到关注列表，显示净值和各项收益率
-4. 可以随时删除不再关注的基金
+### 股票相关
+- `GET /api/stock/prices` - 获取关注股票价格
+- `GET /api/stock/watchlist` - 获取股票关注列表
+- `POST /api/stock/watchlist` - 添加股票到关注列表
+- `DELETE /api/stock/watchlist` - 从关注列表移除股票
 
-### 价格提醒设置
+### 基金相关
+- `GET /api/fund/prices` - 获取关注基金价格
+- `GET /api/fund/watchlist` - 获取基金关注列表
+- `POST /api/fund/watchlist` - 添加基金到关注列表
+- `DELETE /api/fund/watchlist` - 从关注列表移除基金
 
-1. 进入价格提醒页面
-2. 设置提醒条件（价格高于/低于某个值、涨跌幅超过某个百分比等）
-3. 配置企业微信机器人Webhook地址
-4. 系统将在满足条件时自动发送提醒消息
+### 基金交易相关
+- `GET /api/fund_trans/transactions` - 获取交易记录
+- `POST /api/fund_trans/transactions` - 添加交易记录
+- `DELETE /api/fund_trans/transactions` - 删除交易记录
+- `GET /api/fund_trans/summary` - 获取投资汇总
+- `POST /api/fund_trans/import` - 导入交易记录
+- `GET /api/fund_trans/export` - 导出交易记录
 
-### 基金交易记录管理
+### 通知相关
+- `GET /api/notifications` - 获取通知条件
+- `POST /api/notifications` - 添加通知条件
+- `DELETE /api/notifications` - 删除通知条件
+- `GET/POST /api/webhook` - 企业微信机器人设置
 
-1. 进入基金交易记录页面
-2. 点击"添加记录"录入交易信息（日期、基金代码、名称、金额、份额等）
-3. 支持Excel文件批量导入交易记录
-4. 系统自动计算投资收益和费用统计
+### 日志相关
+- `GET /api/log/list` - 获取系统日志
+- `POST /api/log/clear` - 清空系统日志
 
-## 配置说明
+## 配置
 
-### 数据源配置
+### 数据库配置
+- 数据库文件: `data/stock_fund.db`
+- Excel数据文件: `data/code.xlsx`
 
-- 股票数据来源于雪球网API
-- 基金数据来源于第三方基金API
-- 系统会自动从Excel文件导入股票代码数据
+### 日志配置
+- 日志目录: `logs/`
+- 日志文件: `logs/app.log`
+- 日志保留: 30天
 
-### 数据存储
+## 部署
 
-- 所有数据存储在SQLite数据库中（`data/stock_fund.db`）
-- 交易记录、关注列表等数据持久化保存
-- 支持从旧版JSON文件迁移数据
+```bash
+# 安装依赖
+pip install -r requirements.txt
 
-### 缓存策略
+# 启动应用
+python app.py
+```
 
-- 实时数据缓存5分钟，减少API调用频率
-- 智能缓存机制，仅在页面可见时更新数据
+应用默认运行在 `http://0.0.0.0:3333`
 
-## 注意事项
-
-- 本系统仅供个人投资参考，不构成投资建议
-- API数据来源可能因网络或服务商策略变化而失效
-- 价格提醒功能依赖企业微信机器人，需自行配置Webhook地址
-- 基金交易记录功能仅用于个人记录，不保证数据准确性
-- 请定期备份交易记录数据，以防数据丢失
-- 系统默认运行在3333端口，如需修改可在app.py中调整
-
-## 开发说明
-
-### 项目结构
+## 文件结构
 
 ```
 stock/
-├── app.py                 # 主应用入口
-├── stock_module.py        # 股票模块
-├── fund.py               # 基金模块
-├── fund_trans.py         # 基金交易模块
-├── requirements.txt      # 依赖包列表
-├── templates/            # 前端模板文件
-├── data/                 # 数据存储目录
-├── logs/                 # 日志文件目录
-└── README.md
+├── app.py                 # 应用入口
+├── requirements.txt       # 依赖包列表
+├── README.md             # 项目说明
+├── LICENSE              # 许可证
+├── data/                # 数据文件
+│   ├── stock_fund.db    # SQLite数据库
+│   └── code.xlsx        # 股票代码Excel文件
+├── logs/                # 日志文件
+├── templates/           # 前端模板
+└── modules/             # 功能模块
+    ├── models.py        # 数据模型和工具
+    ├── stock_module.py  # 股票模块
+    ├── fund.py          # 基金模块
+    ├── fund_trans.py    # 基金交易模块
+    ├── notify.py        # 通知模块
+    └── log.py           # 日志模块
 ```
 
-### API接口
+## 第三方API
 
-- `/api/stock/*` - 股票相关接口
-- `/api/fund/*` - 基金相关接口
-- `/api/fund_trans/*` - 基金交易相关接口
-- `/api/notifications/*` - 价格提醒相关接口
-
-## 贡献
-
-欢迎提交Issue和Pull Request来改进本项目。
+- 股票数据API: 雪球财经API
+- 基金数据API: autostock.cn API
 
 ## 许可证
 
-本项目采用 MIT 许可证。
+MIT License
