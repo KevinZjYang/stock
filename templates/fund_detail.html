@@ -320,8 +320,18 @@
                 <button class="btn btn-danger" onclick="closeFundDetailModal()" style="padding: 4px 8px; font-size: 14px;">×</button>
             </div>
             <div id="fundDetailContent">
-                <div id="fundChartContainer" style="height: 400px; margin-bottom: 20px;">
-                    <canvas id="fundChart"></canvas>
+                <div style="margin-bottom: 15px;">
+                    <div style="margin-bottom: 10px;">
+                        <strong>时间段选择：</strong>
+                        <button class="btn btn-sm" id="period1M" onclick="setPeriod('1M')">一个月</button>
+                        <button class="btn btn-sm" id="period3M" onclick="setPeriod('3M')">三个月</button>
+                        <button class="btn btn-sm" id="period6M" onclick="setPeriod('6M')">半年</button>
+                        <button class="btn btn-sm" id="period1Y" onclick="setPeriod('1Y')">一年</button>
+                        <button class="btn btn-sm" id="periodALL" onclick="setPeriod('ALL')" style="background: #3498db; color: white;">成立以来</button>
+                    </div>
+                    <div id="fundChartContainer" style="height: 400px; margin-bottom: 20px;">
+                        <canvas id="fundChart"></canvas>
+                    </div>
                 </div>
                 <div id="fundBasicInfo" style="margin-bottom: 20px;"></div>
             </div>
@@ -1019,7 +1029,7 @@
 
                     // 缓存中没有净值走势图数据，发起请求获取详细数据
                     try {
-                        const response = await fetch(`/api/fund/detail?code=${code}`);
+                        const response = await fetch(`/api/fund/detail?code=${code}&period=${currentPeriod}`);
                         if (!response.ok) {
                             throw new Error(`HTTP ${response.status}`);
                         }
@@ -1069,7 +1079,7 @@
                         document.getElementById('fundBasicInfo').innerHTML = basicInfoHtml;
 
                         // 绘制净值走势图
-                        drawNetWorthChart(detailedFundData);
+                        drawNetWorthChart(detailedFundData, currentPeriod);
 
                     } catch (error) {
                         console.error('获取基金详情失败:', error);
@@ -1107,14 +1117,14 @@
                     document.getElementById('fundBasicInfo').innerHTML = basicInfoHtml;
 
                     // 绘制净值走势图
-                    drawNetWorthChart(fundData);
+                    drawNetWorthChart(fundData, currentPeriod);
                 }
             } else {
                 console.log('缓存中不存在该基金的数据，发起请求');
 
                 // 缓存中完全没有该基金的数据，发起请求
                 try {
-                    const response = await fetch(`/api/fund/detail?code=${code}`);
+                    const response = await fetch(`/api/fund/detail?code=${code}&period=${currentPeriod}`);
                     if (!response.ok) {
                         throw new Error(`HTTP ${response.status}`);
                     }
@@ -1164,7 +1174,7 @@
                     document.getElementById('fundBasicInfo').innerHTML = basicInfoHtml;
 
                     // 绘制净值走势图
-                    drawNetWorthChart(fundData);
+                    drawNetWorthChart(fundData, currentPeriod);
 
                 } catch (error) {
                     console.error('获取基金详情失败:', error);
@@ -1411,6 +1421,394 @@
             } catch (e) {
                 console.error('创建图表时出错:', e);
                 document.getElementById('fundChartContainer').innerHTML = '<div class="chart-loading">图表渲染失���: ' + e.message + '</div>';
+            }
+        }
+
+        // 当前时间段，默认为成立以来
+        let currentPeriod = 'ALL';
+
+        // 设置时间段
+        function setPeriod(period) {
+            currentPeriod = period;
+
+            // 更新按钮样式
+            document.querySelectorAll('[id^="period"]').forEach(btn => {
+                btn.style.background = '';
+                btn.style.color = '';
+            });
+
+            const selectedBtn = document.getElementById(`period${period}`);
+            if (selectedBtn) {
+                selectedBtn.style.background = '#3498db';
+                selectedBtn.style.color = 'white';
+            }
+
+            // 重新绘制图表
+            if (window.currentFundData) {
+                drawNetWorthChart(window.currentFundData, currentPeriod);
+            }
+        }
+
+        // 过滤数据按时间段
+        function parseDate(dateString) {
+            // 尝试多种日期格式
+            if (!dateString) return null;
+
+            // 如果已经是Date对象，直接返回
+            if (dateString instanceof Date) return dateString;
+
+            // 尝试标准格式
+            let date = new Date(dateString);
+
+            // 如果标准解析失败，尝试其他格式
+            if (isNaN(date.getTime())) {
+                // 尝试 "YYYY-MM-DD" 格式
+                date = new Date(dateString.replace(/-/g, '/'));
+            }
+
+            if (isNaN(date.getTime())) {
+                // 尝试 "YYYY/MM/DD" 格式
+                date = new Date(dateString);
+            }
+
+            // 如果还是失败，返回null
+            return isNaN(date.getTime()) ? null : date;
+        }
+
+        function filterDataByPeriod(data, period) {
+            if (!data || data.length === 0) return [];
+
+            const now = new Date();
+            let startDate = new Date(now);
+
+            // 根据时间段设置开始日期
+            switch (period) {
+                case '1M':
+                    startDate.setMonth(startDate.getMonth() - 1);
+                    break;
+                case '3M':
+                    startDate.setMonth(startDate.getMonth() - 3);
+                    break;
+                case '6M':
+                    startDate.setMonth(startDate.getMonth() - 6);
+                    break;
+                case '1Y':
+                    startDate.setFullYear(startDate.getFullYear() - 1);
+                    break;
+                case 'ALL':
+                default:
+                    // 不过滤，返回全部数据
+                    return data;
+            }
+
+            // 将开始日期转换为时间戳便于比较
+            const startTime = startDate.getTime();
+
+            // 过滤数据
+            return data.filter(item => {
+                let itemDate = null;
+
+                // 根据数据格式判断日期字段
+                if (Array.isArray(item) && item.length >= 2) {
+                    // 格式为 [日期, 单位净值, 净值涨幅, 每份分红]
+                    itemDate = parseDate(item[0]);
+                } else if (typeof item === 'object' && item !== null) {
+                    // 尝试其他可能的格式
+                    if (item.x) {
+                        itemDate = parseDate(item.x);
+                    } else if (item.date) {
+                        itemDate = parseDate(item.date);
+                    } else if (item[0]) {
+                        itemDate = parseDate(item[0]);
+                    }
+                }
+
+                // 如果无法解析日期，保留该项（避免意外过滤数据）
+                if (!itemDate) {
+                    console.warn('无法解析日期，保留该项:', item);
+                    return true;
+                }
+
+                // 检查日期是否在指定范围内
+                return itemDate.getTime() >= startTime;
+            });
+        }
+
+        // 绘制净值走势图
+        function drawNetWorthChart(fundData, period = 'ALL') {
+            // 保存当前基金数据供后续使用
+            window.currentFundData = fundData;
+            currentPeriod = period;
+
+            console.log('开始绘制净值走势图，基金数据:', fundData, '时间段:', period);
+
+            // 净值数据
+            const netWorthData = fundData.netWorthData || [];
+            const totalNetWorthData = fundData.totalNetWorthData || [];
+
+            console.log('净值数据:', netWorthData);
+            console.log('累计净值数据:', totalNetWorthData);
+
+            // 根据时间段过滤数据
+            const filteredNetWorthData = filterDataByPeriod(netWorthData, period);
+            const filteredTotalNetWorthData = filterDataByPeriod(totalNetWorthData, period);
+
+            console.log('过滤后的净值数据:', filteredNetWorthData);
+            console.log('过滤后的累计净值数据:', filteredTotalNetWorthData);
+
+            // 准备图表数据
+            const labels = [];
+            const netWorthValues = [];
+            const totalNetWorthValues = [];
+
+            // 解析净值数据 - 格式可能为 [日期, 单位净值, 净值涨幅, 每份分红] 或其他格式
+            if (filteredNetWorthData && Array.isArray(filteredNetWorthData)) {
+                console.log('处理 netWorthData，长度:', filteredNetWorthData.length);
+                // 只有当数据长度大于0时才处理
+                if (filteredNetWorthData.length > 0) {
+                    filteredNetWorthData.forEach((item, index) => {
+                        console.log(`netWorthData[${index}]:`, item, '类型:', typeof item);
+                        if (Array.isArray(item) && item.length >= 2) {
+                            // 格式为 [日期, 单位净值, 净值涨幅, 每份分红]
+                            const date = item[0]; // 日期
+                            const value = parseFloat(item[1]); // 单位净值
+                            console.log(`  - 解析为: 日期=${date}, 净值=${value}, 有效=${!isNaN(value)}`);
+                            if (!isNaN(value)) {
+                                labels.push(date);
+                                netWorthValues.push(value);
+                            }
+                        } else if (typeof item === 'object' && item !== null) {
+                            // 尝试其他可能的格式，如 { date: "...", value: "..." }
+                            console.log(`  - 尝试对象格式: x=${item.x}, y=${item.y}, date=${item.date}, value=${item.value}`);
+                            if (item.x && item.y) {
+                                labels.push(item.x);
+                                netWorthValues.push(parseFloat(item.y));
+                            } else if (item.date && item.value) {
+                                labels.push(item.date);
+                                netWorthValues.push(parseFloat(item.value));
+                            } else if (item[0] && item[1]) {
+                                // 可能是对象形式但可以像数组一样访问
+                                labels.push(item[0]);
+                                netWorthValues.push(parseFloat(item[1]));
+                            }
+                        } else {
+                            // 如果是简单值，使用索引作为标签
+                            const value = parseFloat(item);
+                            console.log(`  - 解析为简单值: ${value}, 有效=${!isNaN(value)}`);
+                            if (!isNaN(value)) {
+                                labels.push(`日期${index+1}`);
+                                netWorthValues.push(value);
+                            }
+                        }
+                    });
+                } else {
+                    console.log('filteredNetWorthData 为空数组，跳过处理');
+                }
+            } else {
+                console.log('netWorthData 不是有效的数组格式');
+            }
+
+            // 解析累计净值数据 - 格式可能为 [日期, 单位净值, 净值涨幅, 每份分红] 或其他格式
+            if (filteredTotalNetWorthData && Array.isArray(filteredTotalNetWorthData)) {
+                console.log('处理 totalNetWorthData，长度:', filteredTotalNetWorthData.length);
+                // 只有当数据长度大于0时才处理
+                if (filteredTotalNetWorthData.length > 0) {
+                    filteredTotalNetWorthData.forEach((item, index) => {
+                        console.log(`totalNetWorthData[${index}]:`, item, '类型:', typeof item);
+                        if (Array.isArray(item) && item.length >= 2) {
+                            // 格式为 [日期, 累计净值, 净值涨幅, 每份分红]
+                            const date = item[0]; // 日期
+                            const value = parseFloat(item[1]); // 累计净值
+                            console.log(`  - 解析为: 日期=${date}, 净值=${value}, 有效=${!isNaN(value)}`);
+                            if (!isNaN(value)) {
+                                // 如果labels还没有填充，从累计净值数据中获取
+                                if (labels.length <= index) {
+                                    labels.push(date);
+                                }
+                                totalNetWorthValues.push(value);
+                            }
+                        } else if (typeof item === 'object' && item !== null) {
+                            // 尝试其他可能的格式
+                            console.log(`  - 尝试对象格式: x=${item.x}, y=${item.y}, date=${item.date}, value=${item.value}`);
+                            if (item.x && item.y) {
+                                if (labels.length <= index) labels.push(item.x);
+                                totalNetWorthValues.push(parseFloat(item.y));
+                            } else if (item.date && item.value) {
+                                if (labels.length <= index) labels.push(item.date);
+                                totalNetWorthValues.push(parseFloat(item.value));
+                            } else if (item[0] && item[1]) {
+                                if (labels.length <= index) labels.push(item[0]);
+                                totalNetWorthValues.push(parseFloat(item[1]));
+                            }
+                        } else {
+                            // 如果是简单值，使用索引作为标签
+                            const value = parseFloat(item);
+                            console.log(`  - 解析为简单值: ${value}, 有效=${!isNaN(value)}`);
+                            if (!isNaN(value)) {
+                                if (labels.length <= index) labels.push(`日期${index+1}`);
+                                totalNetWorthValues.push(value);
+                            }
+                        }
+                    });
+                } else {
+                    console.log('filteredTotalNetWorthData 为空数组，跳过处理');
+                }
+            } else {
+                console.log('totalNetWorthData 不是有效的数组格式');
+            }
+
+            console.log('处理后的标签:', labels);
+            console.log('处理后的净值值:', netWorthValues);
+            console.log('处理后的累计净值值:', totalNetWorthValues);
+
+            // 检查是否有足够的数据来绘制图表
+            if (labels.length === 0 || (netWorthValues.length === 0 && totalNetWorthValues.length === 0)) {
+                console.log('没有足够的数据来绘制图表');
+                // 如果没有数据，显示提示信息
+                document.getElementById('fundChartContainer').innerHTML = '<div class="chart-loading">暂无净值走势图数据或数据不足</div>';
+                return;
+            } else {
+                console.log('有足够的数据绘制图表，标签数:', labels.length, '净值点数:', netWorthValues.length, '累计净值点数:', totalNetWorthValues.length);
+                // 确保容器中有canvas元素
+                if (!document.getElementById('fundChart')) {
+                    document.getElementById('fundChartContainer').innerHTML = '<canvas id="fundChart"></canvas>';
+                }
+            }
+
+            // 销毁之前的图表实例（如果存在）
+            if (window.currentChart) {
+                try {
+                    window.currentChart.destroy();
+                } catch (e) {
+                    console.warn('销毁图表实例时出错:', e);
+                }
+            }
+
+            // 确保canvas元素存在
+            const canvasElement = document.getElementById('fundChart');
+            if (!canvasElement) {
+                console.error('找不到canvas元素');
+                return;
+            }
+
+            // 获取canvas上下文
+            const chartCtx = canvasElement.getContext('2d');
+            if (!chartCtx) {
+                console.error('无法获取canvas上下文');
+                return;
+            }
+
+            // 构建时间段描述
+            let periodDescription = '';
+            switch (period) {
+                case '1M':
+                    periodDescription = '一个月';
+                    break;
+                case '3M':
+                    periodDescription = '三个月';
+                    break;
+                case '6M':
+                    periodDescription = '半年';
+                    break;
+                case '1Y':
+                    periodDescription = '一年';
+                    break;
+                case 'ALL':
+                    periodDescription = '成立以来';
+                    break;
+            }
+
+            // 创建图表 - 使用更灵活的数据格式
+            try {
+                // 准备数据点，将标签和值组合成{x,y}格式
+                const netWorthDataPoints = labels.map((label, index) => ({
+                    x: label,
+                    y: netWorthValues[index] !== undefined ? netWorthValues[index] : null
+                })).filter(point => point.y !== null);
+
+                const totalNetWorthDataPoints = labels.map((label, index) => ({
+                    x: label,
+                    y: totalNetWorthValues[index] !== undefined ? totalNetWorthValues[index] : null
+                })).filter(point => point.y !== null);
+
+                console.log('准备的单位净值数据点:', netWorthDataPoints);
+                console.log('准备的累计净值数据点:', totalNetWorthDataPoints);
+                console.log('单位净值数据点数量:', netWorthDataPoints.length);
+                console.log('累计净值数据点数量:', totalNetWorthDataPoints.length);
+
+                // 创建图表
+                window.currentChart = new Chart(chartCtx, {
+                    type: 'line',
+                    data: {
+                        datasets: [
+                            {
+                                label: '单位净值',
+                                data: netWorthDataPoints,
+                                borderColor: '#3498db',
+                                backgroundColor: 'rgba(52, 152, 219, 0.1)',
+                                borderWidth: 2,
+                                fill: false,
+                                tension: 0.1,
+                                pointRadius: 2,
+                                pointHoverRadius: 5
+                            },
+                            {
+                                label: '累计净值',
+                                data: totalNetWorthDataPoints,
+                                borderColor: '#2ecc71',
+                                backgroundColor: 'rgba(46, 204, 113, 0.1)',
+                                borderWidth: 2,
+                                fill: false,
+                                tension: 0.1,
+                                pointRadius: 2,
+                                pointHoverRadius: 5
+                            }
+                        ]
+                    },
+                    options: {
+                        responsive: true,
+                        maintainAspectRatio: false,
+                        scales: {
+                            x: {
+                                type: 'category', // 使用分类轴
+                                title: {
+                                    display: true,
+                                    text: '时间'
+                                },
+                                ticks: {
+                                    maxRotation: 60,
+                                    minRotation: 45,
+                                    maxTicksLimit: 20  // 限制显示的刻度数量，可以根据需要调整
+                                }
+                            },
+                            y: {
+                                title: {
+                                    display: true,
+                                    text: '金额'
+                                },
+                                beginAtZero: false
+                            }
+                        },
+                        plugins: {
+                            title: {
+                                display: true,
+                                text: `基金净值走势图 (${periodDescription})`
+                            },
+                            legend: {
+                                position: 'top',
+                            },
+                            tooltip: {
+                                mode: 'index',
+                                intersect: false
+                            }
+                        }
+                    }
+                });
+
+                console.log('图表创建成功');
+            } catch (e) {
+                console.error('创建图表时出错:', e);
+                document.getElementById('fundChartContainer').innerHTML = '<div class="chart-loading">图表渲染失败: ' + e.message + '</div>';
             }
         }
 

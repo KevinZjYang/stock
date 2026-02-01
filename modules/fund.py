@@ -287,15 +287,32 @@ def get_fund_detail():
     code = request.args.get('code')
     start_date = request.args.get('startDate')
     end_date = request.args.get('endDate')
+    period = request.args.get('period')  # 新增：时间周期参数
     client_ip = request.remote_addr
-    app_logger.info(f"获取基金详情请求来自: {client_ip}, 基金代码: {code}, 开始日期: {start_date}, 结束日期: {end_date}")
+    app_logger.info(f"获取基金详情请求来自: {client_ip}, 基金代码: {code}, 开始日期: {start_date}, 结束日期: {end_date}, 时间周期: {period}")
 
     if not code:
         app_logger.warning(f"获取基金详情失败: 缺少基金代码, IP: {client_ip}")
         return jsonify({'error': '缺少基金代码'}), 400
 
-    # 设置默认日期范围：startDate默认为一个月前，endDate为当前时间
-    if not start_date or not end_date:
+    # 根据时间段参数设置日期范围
+    if period:
+        end_date = datetime.now().strftime('%Y-%m-%d')
+        if period == '1M':
+            start_date_obj = datetime.now() - timedelta(days=30)
+        elif period == '3M':
+            start_date_obj = datetime.now() - timedelta(days=90)
+        elif period == '6M':
+            start_date_obj = datetime.now() - timedelta(days=180)
+        elif period == '1Y':
+            start_date_obj = datetime.now() - timedelta(days=365)
+        else:  # ALL or default
+            # 对于成立以来，我们可以设置一个较早的日期，比如5年前
+            start_date_obj = datetime.now() - timedelta(days=5*365)
+        start_date = start_date_obj.strftime('%Y-%m-%d')
+        app_logger.info(f"根据时间段参数设置日期范围: startDate={start_date}, endDate={end_date}")
+    elif not start_date or not end_date:
+        # 设置默认日期范围：startDate默认为一个月前，endDate为当前时间
         end_date = datetime.now().strftime('%Y-%m-%d')
         start_date_obj = datetime.now() - timedelta(days=30)
         start_date = start_date_obj.strftime('%Y-%m-%d')
