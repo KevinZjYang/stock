@@ -119,26 +119,22 @@ python app.py
 
 应用默认运行在 `http://0.0.0.0:3333`
 
-### 方法二：Docker 自动化部署（推荐）
+### 在线一键部署（无需下载脚本）
 
-使用提供的自动化部署脚本一键部署：
+直接在命令行中运行以下命令即可开始部署（无需预先下载任何脚本）：
 
-#### Windows (PowerShell):
+#### Windows PowerShell (一行命令部署):
 ```powershell
-# 设置执行策略（首次运行）
-Set-ExecutionPolicy -ExecutionPolicy RemoteSigned -Scope CurrentUser
-
-# 运行部署脚本（默认从 https://github.com/KevinZjYang/stock 克隆）
-.\deploy.ps1
+powershell -ExecutionPolicy Bypass -Command "Invoke-RestMethod -Uri 'https://raw.githubusercontent.com/KevinZjYang/stock/main/deploy.ps1' | Invoke-Expression"
 ```
 
-#### Windows (命令提示符):
-```cmd
-# 运行部署脚本（默认从 https://github.com/KevinZjYang/stock 克隆）
-deploy.bat
+#### Linux/macOS (一行命令部署):
+```bash
+curl -sSL https://raw.githubusercontent.com/KevinZjYang/stock/main/deploy.sh | bash
 ```
 
-自动化部署完成后，应用将在 `http://localhost:3333` 上运行。
+在线部署方式会直接从 GitHub 获取最新的部署脚本并立即执行，无需预先下载到本地。
+现在用户只需要在命令行中输入一个简单的命令，就可以开始部署整个应用，真正实现了"一个链接"启动部署的功能。
 
 ## 文件结构
 
