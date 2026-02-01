@@ -827,6 +827,42 @@ def load_fund_watchlist():
     conn.close()
     return result
 
+def add_fund_to_watchlist(code):
+    """添加基金到关注列表"""
+    conn = get_db_connection()
+    cursor = conn.cursor()
+    try:
+        cursor.execute('INSERT INTO fund_watchlist (code) VALUES (?)', (code,))
+        conn.commit()
+        conn.close()
+        app_logger.info(f"成功添加基金到关注列表: {code}")
+        return True
+    except sqlite3.IntegrityError:
+        # 基金代码已存在
+        conn.close()
+        app_logger.warning(f"基金已在关注列表中: {code}")
+        return False
+    except Exception as e:
+        app_logger.error(f"添加基金到关注列表失败: {e}")
+        conn.close()
+        return False
+
+def remove_fund_from_watchlist(code):
+    """从基金关注列表移除"""
+    conn = get_db_connection()
+    cursor = conn.cursor()
+    cursor.execute('DELETE FROM fund_watchlist WHERE code = ?', (code,))
+    rows_affected = cursor.rowcount
+    if rows_affected > 0:
+        conn.commit()
+        conn.close()
+        app_logger.info(f"成功从基金关注列表移除: {code}")
+        return True
+    else:
+        conn.close()
+        app_logger.warning(f"基金不在关注列表中: {code}")
+        return False
+
 def fetch_fund_price_batch_sync(codes):
     """同步获取多个基金的价格数据"""
     try:

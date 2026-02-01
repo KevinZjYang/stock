@@ -973,6 +973,14 @@
             });
         });
 
+        // 如果页面已经加载完成但initPage还没被调用，则手动调用
+        if (document.readyState === 'complete') {
+            // 页面已经加载完成，但可能initPage还没被调用
+            if (typeof window.initPage === 'function') {
+                setTimeout(window.initPage, 100); // 延迟一点确保所有资源加载完成
+            }
+        }
+
         // 显示基金详情和净值走势图
         async function showFundDetail(code) {
             console.log('开始显示基金详情，基金代码:', code);
@@ -1392,7 +1400,7 @@
                 console.log('图表创建成功');
             } catch (e) {
                 console.error('创建图表时出错:', e);
-                document.getElementById('fundChartContainer').innerHTML = '<div class="chart-loading">图表渲染失败: ' + e.message + '</div>';
+                document.getElementById('fundChartContainer').innerHTML = '<div class="chart-loading">图表渲染失���: ' + e.message + '</div>';
             }
         }
 

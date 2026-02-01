@@ -158,7 +158,7 @@ def manage_settings():
         return jsonify({'success': True, 'settings': data})
 
 @fund_bp.route('/list', methods=['GET'])
-def get_all_indices():
+def get_all_indices_main():
     """获取所有指数列表"""
     from modules.models import get_db_connection
     conn = get_db_connection()
@@ -169,7 +169,46 @@ def get_all_indices():
     return jsonify(indices)
 
 @fund_bp.route('/watchlist', methods=['GET', 'POST', 'DELETE'])
-def manage_index_watchlist():
+def manage_fund_watchlist_main():
+    """管理基金关注列表"""
+    from modules.models import (
+        load_fund_watchlist, add_fund_to_watchlist, remove_fund_from_watchlist
+    )
+
+    if request.method == 'GET':
+        watchlist = load_fund_watchlist()
+        return jsonify(watchlist)
+
+    elif request.method == 'POST':
+        data = request.get_json()
+        if not data or 'code' not in data:
+            return jsonify({'error': '缺少基金代码'}), 400
+
+        code = data['code'].strip()
+        if add_fund_to_watchlist(code):
+            app_logger.info(f"添加基金到关注列表: {code}")
+            watchlist = load_fund_watchlist()  # 返回更新后的列表
+            return jsonify({'watchlist': watchlist})
+        else:
+            app_logger.warning(f"添加基金失败，不是有效的基金代码: {code}")
+            return jsonify({'error': '不是有效的基金代码'}), 400
+
+    elif request.method == 'DELETE':
+        data = request.get_json()
+        if not data or 'code' not in data:
+            return jsonify({'error': '缺少基金代码'}), 400
+
+        code = data['code'].strip()
+        if remove_fund_from_watchlist(code):
+            app_logger.info(f"从基金关注列表移除: {code}")
+            watchlist = load_fund_watchlist()  # 返回更新后的列表
+            return jsonify({'watchlist': watchlist})
+        else:
+            app_logger.warning(f"移除基金失败，基金不在关注列表中: {code}")
+            return jsonify({'error': '基金不在关注列表中'}), 400
+
+@fund_bp.route('/index/watchlist', methods=['GET', 'POST', 'DELETE'])
+def manage_index_watchlist_main():
     """管理指数关注列表"""
     from modules.models import (
         load_index_watchlist, add_index_to_watchlist, remove_index_from_watchlist
