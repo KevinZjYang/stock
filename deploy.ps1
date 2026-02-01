@@ -124,11 +124,31 @@ function Prepare-SourceCode {
                 Copy-Item $_.FullName -Destination $ProjectDir -Recurse -Force
             }
 
-            # 恢复data目录
+            # 恢复data目录内容
             if ($dataBackupPath -and (Test-Path $dataBackupPath)) {
-                Copy-Item $dataBackupPath (Join-Path $ProjectDir "data") -Recurse -Force
+                $newDataPath = Join-Path $ProjectDir "data"
+                # 确保新的data目录存在
+                if (!(Test-Path $newDataPath)) {
+                    New-Item -ItemType Directory -Path $newDataPath -Force | Out-Null
+                }
+                # 将备份的data目录内容复制到新的data目录中
+                Get-ChildItem -Path $dataBackupPath | ForEach-Object {
+                    $destinationPath = Join-Path $newDataPath $_.Name
+                    if (Test-Path $destinationPath) {
+                        # 如果目标位置已存在同名项，则跳过或合并（对于目录）
+                        if ($_.PSIsContainer) {
+                            # 如果是目录，递归复制内容
+                            Copy-Item $_.FullName $destinationPath -Recurse -Force
+                        }
+                        # 如果是文件，默认的Copy-Item会覆盖
+                    } else {
+                        # 如果目标位置不存在，则直接复制
+                        Copy-Item $_.FullName $destinationPath -Recurse -Force
+                    }
+                }
+                # 删除备份的data目录
                 Remove-Item $dataBackupPath -Force -Recurse
-                Write-Info "已恢复data目录"
+                Write-Info "已恢复data目录内容"
             }
 
             # 切换到项目目录
@@ -164,11 +184,31 @@ function Prepare-SourceCode {
         exit 1
     }
 
-    # 恢复data目录
+    # 恢复data目录内容
     if ($dataBackupPath -and (Test-Path $dataBackupPath)) {
-        Copy-Item $dataBackupPath (Join-Path $ProjectDir "data") -Recurse -Force
+        $newDataPath = Join-Path $ProjectDir "data"
+        # 确保新的data目录存在
+        if (!(Test-Path $newDataPath)) {
+            New-Item -ItemType Directory -Path $newDataPath -Force | Out-Null
+        }
+        # 将备份的data目录内容复制到新的data目录中
+        Get-ChildItem -Path $dataBackupPath | ForEach-Object {
+            $destinationPath = Join-Path $newDataPath $_.Name
+            if (Test-Path $destinationPath) {
+                # 如果目标位置已存在同名项，则跳过或合并（对于目录）
+                if ($_.PSIsContainer) {
+                    # 如果是目录，递归复制内容
+                    Copy-Item $_.FullName $destinationPath -Recurse -Force
+                }
+                # 如果是文件，默认的Copy-Item会覆盖
+            } else {
+                # 如果目标位置不存在，则直接复制
+                Copy-Item $_.FullName $destinationPath -Recurse -Force
+            }
+        }
+        # 删除备份的data目录
         Remove-Item $dataBackupPath -Force -Recurse
-        Write-Info "已恢复data目录"
+        Write-Info "已恢复data目录内容"
     }
 
     Write-Success "仓库克隆成功"

@@ -134,10 +134,33 @@ prepare_source_code() {
                 fi
             done
 
-            # 恢复data目录
+            # 恢复data目录内容
             if [[ -n "$DATA_BACKUP_PATH" && -d "$DATA_BACKUP_PATH" ]]; then
-                mv "$DATA_BACKUP_PATH" "$PROJECT_DIR/data"
-                print_info "已恢复data目录"
+                NEW_DATA_PATH="$PROJECT_DIR/data"
+                # 确保新的data目录存在
+                mkdir -p "$NEW_DATA_PATH"
+                # 将备份的data目录内容复制到新的data目录中
+                for item in "$DATA_BACKUP_PATH"/*; do
+                    if [[ -n "$item" ]]; then
+                        item_name=$(basename "$item")
+                        destination_path="$NEW_DATA_PATH/$item_name"
+                        if [[ -e "$destination_path" ]]; then
+                            # 如果目标位置已存在同名项，则递归复制（合并目录内容）
+                            if [[ -d "$item" && -d "$destination_path" ]]; then
+                                cp -r "$item"/* "$destination_path"/ 2>/dev/null || true
+                            else
+                                # 如果是文件，则覆盖
+                                cp -r "$item" "$destination_path"
+                            fi
+                        else
+                            # 如果目标位置不存在，则直接复制
+                            cp -r "$item" "$destination_path"
+                        fi
+                    fi
+                done
+                # 删除备份的data目录
+                rm -rf "$DATA_BACKUP_PATH"
+                print_info "已恢复data目录内容"
             fi
 
             # 切换到项目目录
@@ -182,10 +205,33 @@ prepare_source_code() {
         exit 1
     fi
 
-    # 恢复data目录
+    # 恢复data目录内容
     if [[ -n "$DATA_BACKUP_PATH" && -d "$DATA_BACKUP_PATH" ]]; then
-        mv "$DATA_BACKUP_PATH" "$PROJECT_DIR/data"
-        print_info "已恢复data目录"
+        NEW_DATA_PATH="$PROJECT_DIR/data"
+        # 确保新的data目录存在
+        mkdir -p "$NEW_DATA_PATH"
+        # 将备份的data目录内容复制到新的data目录中
+        for item in "$DATA_BACKUP_PATH"/*; do
+            if [[ -n "$item" ]]; then
+                item_name=$(basename "$item")
+                destination_path="$NEW_DATA_PATH/$item_name"
+                if [[ -e "$destination_path" ]]; then
+                    # 如果目标位置已存在同名项，则递归复制（合并目录内容）
+                    if [[ -d "$item" && -d "$destination_path" ]]; then
+                        cp -r "$item"/* "$destination_path"/ 2>/dev/null || true
+                    else
+                        # 如果是文件，则覆盖
+                        cp -r "$item" "$destination_path"
+                    fi
+                else
+                    # 如果目标位置不存在，则直接复制
+                    cp -r "$item" "$destination_path"
+                fi
+            fi
+        done
+        # 删除备份的data目录
+        rm -rf "$DATA_BACKUP_PATH"
+        print_info "已恢复data目录内容"
     fi
 
     print_success "仓库克隆成功"
