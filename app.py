@@ -20,10 +20,6 @@ DATABASE_PATH = os.path.join(BASE_DIR, 'data', 'stock_fund.db')
 
 # 数据文件路径
 STOCK_DATA_FILE = os.path.join(BASE_DIR, 'data', 'code.xlsx')
-STOCK_WATCHLIST_FILE = os.path.join(BASE_DIR, 'data', 'stock_watchlist.json')
-FUND_WATCHLIST_FILE = os.path.join(BASE_DIR, 'data', 'fund_watchlist.json')
-FUND_TRANSACTIONS_FILE = os.path.join(BASE_DIR, 'data', 'fund_transactions.json')
-SETTINGS_FILE = os.path.join(BASE_DIR, 'data', 'settings.json')
 
 # 缓存配置
 CACHE_EXPIRY = 300  # 缓存过期时间（秒），5分钟
@@ -34,15 +30,11 @@ LOG_FILE = os.path.join(LOG_DIR, 'app.log')
 
 # 确保数据目录存在
 os.makedirs(os.path.dirname(STOCK_DATA_FILE), exist_ok=True)
-os.makedirs(os.path.dirname(STOCK_WATCHLIST_FILE), exist_ok=True)
-os.makedirs(os.path.dirname(FUND_WATCHLIST_FILE), exist_ok=True)
-os.makedirs(os.path.dirname(FUND_TRANSACTIONS_FILE), exist_ok=True)
-os.makedirs(os.path.dirname(SETTINGS_FILE), exist_ok=True)
 os.makedirs(LOG_DIR, exist_ok=True)
 
 # API配置
 STOCK_API_URL = 'https://stock.xueqiu.com/v5/stock/realtime/quotec.json'
-FUND_BATCH_API_URL = 'https://api.autostock.cn/fund/detail/list'
+FUND_BATCH_API_URL = 'https://api.autostock.cn/v1/fund/detail/list'
 
 # ==================== 数据库初始化 ====================
 def init_db():
@@ -109,6 +101,19 @@ def init_db():
             fee REAL,
             type TEXT,
             note TEXT,
+            created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+        )
+    ''')
+
+    # 创建基金基础数据表
+    cursor.execute('''
+        CREATE TABLE IF NOT EXISTS fund_base_data (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            code TEXT UNIQUE NOT NULL,
+            pinyin TEXT,
+            name TEXT,
+            type TEXT,
+            full_pinyin TEXT,
             created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
         )
     ''')
@@ -436,128 +441,7 @@ def finalize_database_structure():
     finally:
         conn.close()
 
-def check_migration_status():
-    """检查迁移状态，防止重复迁移"""
-    conn = get_db_connection()
-    cursor = conn.cursor()
 
-    try:
-        # 检查迁移状态标记
-        cursor.execute("SELECT value FROM settings WHERE key = 'migration_complete'")
-        row = cursor.fetchone()
-        migration_complete = row is not None and row['value'] == 'true'
-        return migration_complete
-    except Exception as e:
-        app_logger.error(f"检查迁移状态失败: {e}")
-        return False
-    finally:
-        conn.close()
-
-def mark_migration_complete():
-    """标记迁移已完成"""
-    conn = get_db_connection()
-    cursor = conn.cursor()
-
-    try:
-        cursor.execute('''
-            INSERT OR REPLACE INTO settings (key, value, updated_at)
-            VALUES (?, ?, CURRENT_TIMESTAMP)
-        ''', ('migration_complete', 'true'))
-        conn.commit()
-    except Exception as e:
-        app_logger.error(f"标记迁移完成状态失败: {e}")
-    finally:
-        conn.close()
-
-def migrate_json_to_db():
-    """将现有的JSON文件迁移到数据库"""
-    # 检查是否已经迁移过
-    if check_migration_status():
-        app_logger.info("JSON数据迁移已完成，跳过重复迁移")
-        return
-
-    # 迁移股票关注列表
-    stock_watchlist = safe_read_json(STOCK_WATCHLIST_FILE, [])
-    if stock_watchlist:
-        conn = get_db_connection()
-        cursor = conn.cursor()
-        for code in stock_watchlist:
-            try:
-                cursor.execute('INSERT OR IGNORE INTO stock_watchlist (code) VALUES (?)', (code,))
-            except Exception as e:
-                app_logger.error(f"插入股票关注列表失败 {code}: {e}")
-        conn.commit()
-        conn.close()
-
-        # 删除旧文件
-        if os.path.exists(STOCK_WATCHLIST_FILE):
-            os.remove(STOCK_WATCHLIST_FILE)
-
-    # 迁移基金关注列表
-    fund_watchlist = safe_read_json(FUND_WATCHLIST_FILE, [])
-    if fund_watchlist:
-        conn = get_db_connection()
-        cursor = conn.cursor()
-        for code in fund_watchlist:
-            try:
-                cursor.execute('INSERT OR IGNORE INTO fund_watchlist (code) VALUES (?)', (code,))
-            except Exception as e:
-                app_logger.error(f"插入基金关注列表失败 {code}: {e}")
-        conn.commit()
-        conn.close()
-
-        # 删除旧文件
-        if os.path.exists(FUND_WATCHLIST_FILE):
-            os.remove(FUND_WATCHLIST_FILE)
-
-    # 迁移基金交易记录
-    fund_transactions = safe_read_json(FUND_TRANSACTIONS_FILE, [])
-    if fund_transactions:
-        conn = get_db_connection()
-        cursor = conn.cursor()
-        for trans in fund_transactions:
-            try:
-                cursor.execute('''
-                    INSERT OR IGNORE INTO fund_transactions
-                    (date, name, code, actual_amount, trade_amount, shares, price, fee, type, note)
-                    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
-                ''', (
-                    trans.get('date'), trans.get('name'), trans.get('code'),
-                    trans.get('actual_amount'), trans.get('trade_amount'), trans.get('shares'),
-                    trans.get('price'), trans.get('fee'), trans.get('type'), trans.get('note')
-                ))
-            except Exception as e:
-                app_logger.error(f"插入基金交易记录失败 {trans.get('id')}: {e}")
-        conn.commit()
-        conn.close()
-
-        # 删除旧文件
-        if os.path.exists(FUND_TRANSACTIONS_FILE):
-            os.remove(FUND_TRANSACTIONS_FILE)
-
-    # 迁移设置
-    settings = safe_read_json(SETTINGS_FILE, {})
-    if settings:
-        conn = get_db_connection()
-        cursor = conn.cursor()
-        for key, value in settings.items():
-            try:
-                cursor.execute('''
-                    INSERT OR REPLACE INTO settings (key, value, updated_at)
-                    VALUES (?, ?, CURRENT_TIMESTAMP)
-                ''', (key, json.dumps(value)))
-            except Exception as e:
-                app_logger.error(f"插入设置失败 {key}: {e}")
-        conn.commit()
-        conn.close()
-
-        # 删除旧文件
-        if os.path.exists(SETTINGS_FILE):
-            os.remove(SETTINGS_FILE)
-
-    # 标记迁移完成
-    mark_migration_complete()
-    app_logger.info("JSON数据迁移完成")
 
 def check_if_excel_needs_import():
     """检查Excel文件是否需要导入（基于文件修改时间和数据库记录）"""
@@ -700,31 +584,7 @@ def load_excel_data_to_db():
         app_logger.error(f"导入Excel数据到数据库失败: {e}")
 
 # ==================== 工具函数 ====================
-def safe_read_json(file_path: str, default: Any = None) -> Any:
-    """安全读取JSON文件"""
-    if default is None:
-        default = []
-    
-    try:
-        if not os.path.exists(file_path):
-            return default
-        
-        with open(file_path, 'r', encoding='utf-8') as f:
-            return json.load(f)
-    except Exception as e:
-        app_logger.error(f"读取JSON文件失败 {file_path}: {e}")
-        return default
 
-def safe_write_json(file_path: str, data: Any) -> bool:
-    """安全写入JSON文件"""
-    try:
-        os.makedirs(os.path.dirname(file_path), exist_ok=True)
-        with open(file_path, 'w', encoding='utf-8') as f:
-            json.dump(data, f, ensure_ascii=False, indent=2)
-        return True
-    except Exception as e:
-        app_logger.error(f"写入JSON文件失败 {file_path}: {e}")
-        return False
 
 def get_market_type(symbol):
     """判断股票市场类型"""
@@ -1161,18 +1021,18 @@ def fetch_fund_price_batch_sync(codes):
         if not data or 'data' not in data:
             app_logger.error(f"基金API返回数据为空或格式错误: {code_str}")
             return []
-        
+
         def to_float(value):
             if value is None: return None
             try:
                 if isinstance(value, str): value = value.replace('%', '').strip()
                 return float(value)
             except (ValueError, TypeError): return None
-        
+
         fund_data_list = []
         for fund_data in data['data']:
             code = str(fund_data.get('code', ''))
-            
+
             fund_info = {
                 'code': code,
                 'name': fund_data.get('name', '--'),
@@ -1193,17 +1053,21 @@ def fetch_fund_price_batch_sync(codes):
                 'manager': fund_data.get('manager'),
                 'fundScale': fund_data.get('fundScale'),
                 'netWorthDate': fund_data.get('netWorthDate'),
-                'expectWorthDate': fund_data.get('expectWorthDate')
+                'expectWorthDate': fund_data.get('expectWorthDate'),
+                # 添加格式化的日期信息，便于前端显示
+                'netWorthDisplay': f"{to_float(fund_data.get('netWorth'))}<br><small>{fund_data.get('netWorthDate', '')}</small>" if fund_data.get('netWorth') else "--",
+                'expectWorthDisplay': f"{to_float(fund_data.get('expectWorth'))}<br><small>{fund_data.get('expectWorthDate', '')}</small>" if fund_data.get('expectWorth') else "--"
             }
             fund_data_list.append(fund_info)
         return fund_data_list
-        
+
     except requests.exceptions.Timeout:
         app_logger.error(f"批量获取基金错误: 请求超时 (20秒)")
         return []
     except Exception as e:
         app_logger.error(f"批量获取基金错误: {e}")
         return []
+
 
 def load_fund_transactions():
     """加载基金交易记录"""
@@ -1506,9 +1370,6 @@ def initialize_app():
     # 完成数据库结构调整
     finalize_database_structure()
 
-    # 迁移现有JSON数据到数据库
-    migrate_json_to_db()
-    app_logger.info("JSON数据迁移完成")
 
     # 将Excel数据导入数据库
     load_excel_data_to_db()
@@ -1702,7 +1563,7 @@ def get_fund_prices():
             app_logger.info(f"获取基金价格: 关注列表为空, IP: {client_ip}")
             return jsonify([])
         else:
-            app_logger.info(f"获取基金价格: 批量获取 {len(watchlist)} 个基金, IP: {client_ip}")
+            app_logger.info(f"获取基金价格: 批��获取 {len(watchlist)} 个基金, IP: {client_ip}")
             fund_data_list = fetch_fund_price_batch_sync(watchlist)
             data_cache['funds'] = fund_data_list
             data_cache['last_update'] = current_time
@@ -1803,7 +1664,7 @@ def manage_transactions():
     elif request.method == 'DELETE':
         data = request.get_json()
         if not data:
-            app_logger.warning("删除基金交易记录失败: ���少数据")
+            app_logger.warning("删除基金交易记录失败: �����少数据")
             return jsonify({'error': '缺少数据'}), 400
 
         # 检查是否是清空所有记录的请求
@@ -1820,7 +1681,7 @@ def manage_transactions():
         transaction_id = data['id']
         success = delete_fund_transaction(transaction_id)
         if success:
-            app_logger.info(f"删除基金交易记录成功: ID {transaction_id}")
+            app_logger.info(f"删除���金交易记录成功: ID {transaction_id}")
             return jsonify({'success': True})
         else:
             app_logger.warning(f"删除基金交易记录失败: ID {transaction_id} 不存在")
