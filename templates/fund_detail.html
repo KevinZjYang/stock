@@ -674,22 +674,54 @@
             fetchPrices();
         }
 
+        // 用于缓存基金详细数据，包括净值走势图数据
+        let fundDetailsCache = {};
+
         async function fetchPrices(isManual = false) {
             try {
                 const response = await fetch('/api/fund/prices');
-                
+
                 if (!response.ok) {
                     const errorData = await response.json().catch(() => ({}));
                     throw new Error(errorData.error || `HTTP ${response.status}`);
                 }
 
                 const prices = await response.json();
-                prices.forEach(priceData => updateRow(priceData));
-                
+                prices.forEach(priceData => {
+                    updateRow(priceData);
+
+                    // 将价格数据缓存到基金详情缓存中
+                    // 如果缓存中没有该基金的详细数据，至少先缓存基础价格数据
+                    if (!fundDetailsCache[priceData.code]) {
+                        fundDetailsCache[priceData.code] = { ...priceData };
+                    } else {
+                        // 如果缓存中已有数据，更新其中的价格相关字段
+                        Object.assign(fundDetailsCache[priceData.code], {
+                            netWorth: priceData.netWorth,
+                            expectWorth: priceData.expectWorth,
+                            totalWorth: priceData.totalWorth,
+                            expectGrowth: priceData.expectGrowth,
+                            dayGrowth: priceData.dayGrowth,
+                            lastWeekGrowth: priceData.lastWeekGrowth,
+                            lastMonthGrowth: priceData.lastMonthGrowth,
+                            lastThreeMonthsGrowth: priceData.lastThreeMonthsGrowth,
+                            lastSixMonthsGrowth: priceData.lastSixMonthsGrowth,
+                            lastYearGrowth: priceData.lastYearGrowth,
+                            buyMin: priceData.buyMin,
+                            buySourceRate: priceData.buySourceRate,
+                            buyRate: priceData.buyRate,
+                            manager: priceData.manager,
+                            fundScale: priceData.fundScale,
+                            netWorthDate: priceData.netWorthDate,
+                            expectWorthDate: priceData.expectWorthDate
+                        });
+                    }
+                });
+
                 lastRefreshTime = new Date();
                 const statusText = isManual ? '手动刷新成功' : '刷新成功';
                 updateFooterStatus(`${statusText} | 上次刷新: ${lastRefreshTime.toLocaleTimeString()}`, 'refreshing');
-                
+
             } catch (error) {
                 console.error('获取基金价格失败:', error);
                 updateFooterStatus(`获取基金价格失败: ${error.message}`, 'error');
@@ -943,96 +975,300 @@
 
         // 显示基金详情和净值走势图
         async function showFundDetail(code) {
-            try {
-                const response = await fetch(`/api/fund/detail?code=${code}`);
-                if (!response.ok) {
-                    throw new Error(`HTTP ${response.status}`);
+            console.log('开始显示基金详情，基金代码:', code);
+
+            // 首先检查缓存中是否有数据
+            if (fundDetailsCache[code]) {
+                console.log('缓存中存在基金数据:', fundDetailsCache[code]);
+
+                // 检查缓存的数据是否包含净值走势图数据
+                const fundData = fundDetailsCache[code];
+
+                console.log('检查净值走势图数据:');
+                console.log('- netWorthData 存在:', !!fundData.netWorthData);
+                console.log('- netWorthData 类型:', typeof fundData.netWorthData);
+                console.log('- netWorthData 长度:', Array.isArray(fundData.netWorthData) ? fundData.netWorthData.length : 'Not Array');
+                console.log('- totalNetWorthData 存在:', !!fundData.totalNetWorthData);
+                console.log('- totalNetWorthData 类型:', typeof fundData.totalNetWorthData);
+                console.log('- totalNetWorthData 长度:', Array.isArray(fundData.totalNetWorthData) ? fundData.totalNetWorthData.length : 'Not Array');
+
+                // 如果缓存中没有净值走势图数据，则去获取详细数据
+                if (!fundData.netWorthData || !fundData.totalNetWorthData ||
+                    (Array.isArray(fundData.netWorthData) && fundData.netWorthData.length === 0 &&
+                     Array.isArray(fundData.totalNetWorthData) && fundData.totalNetWorthData.length === 0)) {
+
+                    console.log('缓存中没有净值走势图数据，发起请求获取详细数据');
+
+                    // 缓存中没有净值走势图数据，发起请求获取详细数据
+                    try {
+                        const response = await fetch(`/api/fund/detail?code=${code}`);
+                        if (!response.ok) {
+                            throw new Error(`HTTP ${response.status}`);
+                        }
+
+                        const detailedFundData = await response.json();
+                        if (detailedFundData.error) {
+                            throw new Error(detailedFundData.error);
+                        }
+
+                        console.log('获取到完整的基金数据:', detailedFundData);
+
+                        // 检查返回的数据结构
+                        console.log('返回数据结构检查:');
+                        console.log('- netWorthData 存在:', !!detailedFundData.netWorthData);
+                        console.log('- netWorthData 类型:', typeof detailedFundData.netWorthData);
+                        console.log('- netWorthData 长度:', Array.isArray(detailedFundData.netWorthData) ? detailedFundData.netWorthData.length : 'Not Array');
+                        console.log('- totalNetWorthData 存在:', !!detailedFundData.totalNetWorthData);
+                        console.log('- totalNetWorthData 类型:', typeof detailedFundData.totalNetWorthData);
+                        console.log('- totalNetWorthData 长度:', Array.isArray(detailedFundData.totalNetWorthData) ? detailedFundData.totalNetWorthData.length : 'Not Array');
+
+                        // 将完整的数据更新到缓存中
+                        fundDetailsCache[code] = detailedFundData;
+
+                        // 显示模态框
+                        document.getElementById('fundDetailModal').style.display = 'flex';
+
+                        // 设置标题
+                        document.getElementById('fundDetailTitle').textContent = `${detailedFundData.name} (${detailedFundData.code})`;
+
+                        // 显示基本信息
+                        const basicInfoHtml = `
+                            <div style="display: grid; grid-template-columns: repeat(auto-fill, minmax(200px, 1fr)); gap: 15px; margin-bottom: 20px;">
+                                <div><strong>基金类型:</strong> ${detailedFundData.type || '--'}</div>
+                                <div><strong>单位净值:</strong> ${detailedFundData.netWorth ? detailedFundData.netWorth.toFixed(4) : '--'}</div>
+                                <div><strong>净值日期:</strong> ${detailedFundData.netWorthDate || '--'}</div>
+                                <div><strong>估算净值:</strong> ${detailedFundData.expectWorth ? detailedFundData.expectWorth.toFixed(4) : '--'}</div>
+                                <div><strong>估算日期:</strong> ${detailedFundData.expectWorthDate || '--'}</div>
+                                <div><strong>累计净值:</strong> ${detailedFundData.totalWorth ? detailedFundData.totalWorth.toFixed(4) : '--'}</div>
+                                <div><strong>日增长率:</strong> ${detailedFundData.dayGrowth ? detailedFundData.dayGrowth.toFixed(2) + '%' : '--'}</div>
+                                <div><strong>周增长率:</strong> ${detailedFundData.lastWeekGrowth ? detailedFundData.lastWeekGrowth.toFixed(2) + '%' : '--'}</div>
+                                <div><strong>月增长率:</strong> ${detailedFundData.lastMonthGrowth ? detailedFundData.lastMonthGrowth.toFixed(2) + '%' : '--'}</div>
+                                <div><strong>年增长率:</strong> ${detailedFundData.lastYearGrowth ? detailedFundData.lastYearGrowth.toFixed(2) + '%' : '--'}</div>
+                                <div><strong>基金经理:</strong> ${detailedFundData.manager || '--'}</div>
+                                <div><strong>基金规模:</strong> ${detailedFundData.fundScale || '--'}</div>
+                            </div>
+                        `;
+                        document.getElementById('fundBasicInfo').innerHTML = basicInfoHtml;
+
+                        // 绘制净值走势图
+                        drawNetWorthChart(detailedFundData);
+
+                    } catch (error) {
+                        console.error('获取基金详情失败:', error);
+                        showToast(`获取基金详情失败: ${error.message}`, 'error');
+                    }
+                } else {
+                    console.log('使用缓存的数据（包含净值走势图数据）');
+
+                    // 使用缓存的数据（包含净值走势图数据）
+                    console.log('使用缓存的基金数据:', fundData);
+
+                    // 显示模态框
+                    document.getElementById('fundDetailModal').style.display = 'flex';
+
+                    // 设置标题
+                    document.getElementById('fundDetailTitle').textContent = `${fundData.name} (${fundData.code})`;
+
+                    // 显示基本信息
+                    const basicInfoHtml = `
+                        <div style="display: grid; grid-template-columns: repeat(auto-fill, minmax(200px, 1fr)); gap: 15px; margin-bottom: 20px;">
+                            <div><strong>基金类型:</strong> ${fundData.type || '--'}</div>
+                            <div><strong>单位净值:</strong> ${fundData.netWorth ? fundData.netWorth.toFixed(4) : '--'}</div>
+                            <div><strong>净值日期:</strong> ${fundData.netWorthDate || '--'}</div>
+                            <div><strong>估算净值:</strong> ${fundData.expectWorth ? fundData.expectWorth.toFixed(4) : '--'}</div>
+                            <div><strong>估算日期:</strong> ${fundData.expectWorthDate || '--'}</div>
+                            <div><strong>累计净值:</strong> ${fundData.totalWorth ? fundData.totalWorth.toFixed(4) : '--'}</div>
+                            <div><strong>日增长率:</strong> ${fundData.dayGrowth ? fundData.dayGrowth.toFixed(2) + '%' : '--'}</div>
+                            <div><strong>周增长率:</strong> ${fundData.lastWeekGrowth ? fundData.lastWeekGrowth.toFixed(2) + '%' : '--'}</div>
+                            <div><strong>月增长率:</strong> ${fundData.lastMonthGrowth ? fundData.lastMonthGrowth.toFixed(2) + '%' : '--'}</div>
+                            <div><strong>年增长率:</strong> ${fundData.lastYearGrowth ? fundData.lastYearGrowth.toFixed(2) + '%' : '--'}</div>
+                            <div><strong>基金经理:</strong> ${fundData.manager || '--'}</div>
+                            <div><strong>基金规模:</strong> ${fundData.fundScale || '--'}</div>
+                        </div>
+                    `;
+                    document.getElementById('fundBasicInfo').innerHTML = basicInfoHtml;
+
+                    // 绘制净值走势图
+                    drawNetWorthChart(fundData);
                 }
+            } else {
+                console.log('缓存中不存在该基金的数据，发起请求');
 
-                const fundData = await response.json();
-                if (fundData.error) {
-                    throw new Error(fundData.error);
+                // 缓存中完全没有该基金的数据，发起请求
+                try {
+                    const response = await fetch(`/api/fund/detail?code=${code}`);
+                    if (!response.ok) {
+                        throw new Error(`HTTP ${response.status}`);
+                    }
+
+                    const fundData = await response.json();
+                    if (fundData.error) {
+                        throw new Error(fundData.error);
+                    }
+
+                    console.log('基金数据:', fundData);
+
+                    // 检查返回的数据结构
+                    console.log('返回数据结构检查:');
+                    console.log('- netWorthData 存在:', !!fundData.netWorthData);
+                    console.log('- netWorthData 类型:', typeof fundData.netWorthData);
+                    console.log('- netWorthData 长度:', Array.isArray(fundData.netWorthData) ? fundData.netWorthData.length : 'Not Array');
+                    console.log('- totalNetWorthData 存在:', !!fundData.totalNetWorthData);
+                    console.log('- totalNetWorthData 类型:', typeof fundData.totalNetWorthData);
+                    console.log('- totalNetWorthData 长度:', Array.isArray(fundData.totalNetWorthData) ? fundData.totalNetWorthData.length : 'Not Array');
+
+                    // 将数据存入缓存
+                    fundDetailsCache[code] = fundData;
+
+                    // 显示模态框
+                    document.getElementById('fundDetailModal').style.display = 'flex';
+
+                    // 设置标题
+                    document.getElementById('fundDetailTitle').textContent = `${fundData.name} (${fundData.code})`;
+
+                    // 显示基本信息
+                    const basicInfoHtml = `
+                        <div style="display: grid; grid-template-columns: repeat(auto-fill, minmax(200px, 1fr)); gap: 15px; margin-bottom: 20px;">
+                            <div><strong>基金类型:</strong> ${fundData.type || '--'}</div>
+                            <div><strong>单位净值:</strong> ${fundData.netWorth ? fundData.netWorth.toFixed(4) : '--'}</div>
+                            <div><strong>净值日期:</strong> ${fundData.netWorthDate || '--'}</div>
+                            <div><strong>估算净值:</strong> ${fundData.expectWorth ? fundData.expectWorth.toFixed(4) : '--'}</div>
+                            <div><strong>估算日期:</strong> ${fundData.expectWorthDate || '--'}</div>
+                            <div><strong>累计净值:</strong> ${fundData.totalWorth ? fundData.totalWorth.toFixed(4) : '--'}</div>
+                            <div><strong>日增长率:</strong> ${fundData.dayGrowth ? fundData.dayGrowth.toFixed(2) + '%' : '--'}</div>
+                            <div><strong>周增长率:</strong> ${fundData.lastWeekGrowth ? fundData.lastWeekGrowth.toFixed(2) + '%' : '--'}</div>
+                            <div><strong>月增长率:</strong> ${fundData.lastMonthGrowth ? fundData.lastMonthGrowth.toFixed(2) + '%' : '--'}</div>
+                            <div><strong>年增长率:</strong> ${fundData.lastYearGrowth ? fundData.lastYearGrowth.toFixed(2) + '%' : '--'}</div>
+                            <div><strong>基金经理:</strong> ${fundData.manager || '--'}</div>
+                            <div><strong>基金规模:</strong> ${fundData.fundScale || '--'}</div>
+                        </div>
+                    `;
+                    document.getElementById('fundBasicInfo').innerHTML = basicInfoHtml;
+
+                    // 绘制净值走势图
+                    drawNetWorthChart(fundData);
+
+                } catch (error) {
+                    console.error('获取基金详情失败:', error);
+                    showToast(`获取基金详情失败: ${error.message}`, 'error');
                 }
-
-                console.log('基金数据:', fundData);
-
-                // 显示模态框
-                document.getElementById('fundDetailModal').style.display = 'flex';
-
-                // 设置标题
-                document.getElementById('fundDetailTitle').textContent = `${fundData.name} (${fundData.code})`;
-
-                // 显示基本信息
-                const basicInfoHtml = `
-                    <div style="display: grid; grid-template-columns: repeat(auto-fill, minmax(200px, 1fr)); gap: 15px; margin-bottom: 20px;">
-                        <div><strong>基金类型:</strong> ${fundData.type || '--'}</div>
-                        <div><strong>单位净值:</strong> ${fundData.netWorth ? fundData.netWorth.toFixed(4) : '--'}</div>
-                        <div><strong>净值日期:</strong> ${fundData.netWorthDate || '--'}</div>
-                        <div><strong>估算净值:</strong> ${fundData.expectWorth ? fundData.expectWorth.toFixed(4) : '--'}</div>
-                        <div><strong>估算日期:</strong> ${fundData.expectWorthDate || '--'}</div>
-                        <div><strong>累计净值:</strong> ${fundData.totalWorth ? fundData.totalWorth.toFixed(4) : '--'}</div>
-                        <div><strong>日增长率:</strong> ${fundData.dayGrowth ? fundData.dayGrowth.toFixed(2) + '%' : '--'}</div>
-                        <div><strong>周增长率:</strong> ${fundData.lastWeekGrowth ? fundData.lastWeekGrowth.toFixed(2) + '%' : '--'}</div>
-                        <div><strong>月增长率:</strong> ${fundData.lastMonthGrowth ? fundData.lastMonthGrowth.toFixed(2) + '%' : '--'}</div>
-                        <div><strong>年增长率:</strong> ${fundData.lastYearGrowth ? fundData.lastYearGrowth.toFixed(2) + '%' : '--'}</div>
-                        <div><strong>基金经理:</strong> ${fundData.manager || '--'}</div>
-                        <div><strong>基金规模:</strong> ${fundData.fundScale || '--'}</div>
-                    </div>
-                `;
-                document.getElementById('fundBasicInfo').innerHTML = basicInfoHtml;
-
-                // 绘制净值走势图
-                drawNetWorthChart(fundData);
-
-            } catch (error) {
-                console.error('获取基金详情失败:', error);
-                showToast(`获取基金详情失败: ${error.message}`, 'error');
             }
         }
 
         // 绘制净值走势图
         function drawNetWorthChart(fundData) {
+            console.log('开始绘制净值走势图，基金数据:', fundData);
+
             // 净值数据
             const netWorthData = fundData.netWorthData || [];
             const totalNetWorthData = fundData.totalNetWorthData || [];
 
             console.log('净值数据:', netWorthData);
             console.log('累计净值数据:', totalNetWorthData);
+            console.log('netWorthData 类型:', typeof netWorthData);
+            console.log('totalNetWorthData 类型:', typeof totalNetWorthData);
+            console.log('netWorthData 是否为数组:', Array.isArray(netWorthData));
+            console.log('totalNetWorthData 是否为数组:', Array.isArray(totalNetWorthData));
 
             // 准备图表数据
             const labels = [];
             const netWorthValues = [];
             const totalNetWorthValues = [];
 
-            // 解析净值数据 - 格式为 [日期, 单位净值, 净值涨幅, 每份分红]
+            // 解析净值数据 - 格式可能为 [日期, 单位净值, 净值涨幅, 每份分红] 或其他格式
             if (netWorthData && Array.isArray(netWorthData)) {
-                netWorthData.forEach(item => {
-                    if (Array.isArray(item) && item.length >= 2) {
-                        const date = item[0]; // 日期
-                        const value = parseFloat(item[1]); // 单位净值
-                        if (!isNaN(value)) {
-                            labels.push(date);
-                            netWorthValues.push(value);
+                console.log('处理 netWorthData，长度:', netWorthData.length);
+                // 只有当数据长度大于0时才处理
+                if (netWorthData.length > 0) {
+                    netWorthData.forEach((item, index) => {
+                        console.log(`netWorthData[${index}]:`, item, '类型:', typeof item);
+                        if (Array.isArray(item) && item.length >= 2) {
+                            // 格式为 [日期, 单位净值, 净值涨幅, 每份分红]
+                            const date = item[0]; // 日期
+                            const value = parseFloat(item[1]); // 单位净值
+                            console.log(`  - 解析为: 日期=${date}, 净值=${value}, 有效=${!isNaN(value)}`);
+                            if (!isNaN(value)) {
+                                labels.push(date);
+                                netWorthValues.push(value);
+                            }
+                        } else if (typeof item === 'object' && item !== null) {
+                            // 尝试其他可能的格式，如 { date: "...", value: "..." }
+                            console.log(`  - 尝试对象格式: x=${item.x}, y=${item.y}, date=${item.date}, value=${item.value}`);
+                            if (item.x && item.y) {
+                                labels.push(item.x);
+                                netWorthValues.push(parseFloat(item.y));
+                            } else if (item.date && item.value) {
+                                labels.push(item.date);
+                                netWorthValues.push(parseFloat(item.value));
+                            } else if (item[0] && item[1]) {
+                                // 可能是对象形式但可以像数组一样访问
+                                labels.push(item[0]);
+                                netWorthValues.push(parseFloat(item[1]));
+                            }
+                        } else {
+                            // 如果是简单值，使用索引作为标签
+                            const value = parseFloat(item);
+                            console.log(`  - 解析为简单值: ${value}, 有效=${!isNaN(value)}`);
+                            if (!isNaN(value)) {
+                                labels.push(`日期${index+1}`);
+                                netWorthValues.push(value);
+                            }
                         }
-                    }
-                });
+                    });
+                } else {
+                    console.log('netWorthData 为空数组，跳过处理');
+                }
+            } else {
+                console.log('netWorthData 不是有效的数组格式');
             }
 
-            // 解析累计净值数据 - 格式为 [日期, 单位净值, 净值涨幅, 每份分红]
+            // 解析累计净值数据 - 格式可能为 [日期, 单位净值, 净值涨幅, 每份分红] 或其他格式
             if (totalNetWorthData && Array.isArray(totalNetWorthData)) {
-                totalNetWorthData.forEach(item => {
-                    if (Array.isArray(item) && item.length >= 2) {
-                        const date = item[0]; // 日期
-                        const value = parseFloat(item[1]); // 累计净值
-                        if (!isNaN(value)) {
-                            // 如果labels还没有填充，从累计净值数据中获取
-                            if (labels.length === 0) {
-                                labels.push(date);
+                console.log('处理 totalNetWorthData，长度:', totalNetWorthData.length);
+                // 只有当数据长度大于0时才处理
+                if (totalNetWorthData.length > 0) {
+                    totalNetWorthData.forEach((item, index) => {
+                        console.log(`totalNetWorthData[${index}]:`, item, '类型:', typeof item);
+                        if (Array.isArray(item) && item.length >= 2) {
+                            // 格式为 [日期, 累计净值, 净值涨幅, 每份分红]
+                            const date = item[0]; // 日期
+                            const value = parseFloat(item[1]); // 累计净值
+                            console.log(`  - 解析为: 日期=${date}, 净值=${value}, 有效=${!isNaN(value)}`);
+                            if (!isNaN(value)) {
+                                // 如果labels还没有填充，从累计净值数据中获取
+                                if (labels.length <= index) {
+                                    labels.push(date);
+                                }
+                                totalNetWorthValues.push(value);
                             }
-                            totalNetWorthValues.push(value);
+                        } else if (typeof item === 'object' && item !== null) {
+                            // 尝试其他可能的格式
+                            console.log(`  - 尝试对象格式: x=${item.x}, y=${item.y}, date=${item.date}, value=${item.value}`);
+                            if (item.x && item.y) {
+                                if (labels.length <= index) labels.push(item.x);
+                                totalNetWorthValues.push(parseFloat(item.y));
+                            } else if (item.date && item.value) {
+                                if (labels.length <= index) labels.push(item.date);
+                                totalNetWorthValues.push(parseFloat(item.value));
+                            } else if (item[0] && item[1]) {
+                                if (labels.length <= index) labels.push(item[0]);
+                                totalNetWorthValues.push(parseFloat(item[1]));
+                            }
+                        } else {
+                            // 如果是简单值，使用索引作为标签
+                            const value = parseFloat(item);
+                            console.log(`  - 解析为简单值: ${value}, 有效=${!isNaN(value)}`);
+                            if (!isNaN(value)) {
+                                if (labels.length <= index) labels.push(`日期${index+1}`);
+                                totalNetWorthValues.push(value);
+                            }
                         }
-                    }
-                });
+                    });
+                } else {
+                    console.log('totalNetWorthData 为空数组，跳过处理');
+                }
+            } else {
+                console.log('totalNetWorthData 不是有效的数组格式');
             }
 
             console.log('处理后的标签:', labels);
@@ -1041,10 +1277,12 @@
 
             // 检查是否有足够的数据来绘制图表
             if (labels.length === 0 || (netWorthValues.length === 0 && totalNetWorthValues.length === 0)) {
+                console.log('没有足够的数据来绘制图表');
                 // 如果没有数据，显示提示信息
-                document.getElementById('fundChartContainer').innerHTML = '<div class="chart-loading">暂无净值走势图数据</div>';
+                document.getElementById('fundChartContainer').innerHTML = '<div class="chart-loading">暂无净值走势图数据或数据不足</div>';
                 return;
             } else {
+                console.log('有足够的数据绘制图表，标签数:', labels.length, '净值点数:', netWorthValues.length, '累计净值点数:', totalNetWorthValues.length);
                 // 确保容器中有canvas元素
                 if (!document.getElementById('fundChart')) {
                     document.getElementById('fundChartContainer').innerHTML = '<canvas id="fundChart"></canvas>';
@@ -1053,73 +1291,109 @@
 
             // 销毁之前的图表实例（如果存在）
             if (window.currentChart) {
-                window.currentChart.destroy();
+                try {
+                    window.currentChart.destroy();
+                } catch (e) {
+                    console.warn('销毁图表实例时出错:', e);
+                }
+            }
+
+            // 确保canvas元素存在
+            const canvasElement = document.getElementById('fundChart');
+            if (!canvasElement) {
+                console.error('找不到canvas元素');
+                return;
             }
 
             // 获取canvas上下文
-            const chartCtx = document.getElementById('fundChart').getContext('2d');
+            const chartCtx = canvasElement.getContext('2d');
+            if (!chartCtx) {
+                console.error('无法获取canvas上下文');
+                return;
+            }
 
-            // 创建图表
-            window.currentChart = new Chart(chartCtx, {
-                type: 'line',
-                data: {
-                    labels: labels,
-                    datasets: [
-                        {
-                            label: '单位净值',
-                            data: netWorthValues,
-                            borderColor: '#3498db',
-                            backgroundColor: 'rgba(52, 152, 219, 0.1)',
-                            borderWidth: 2,
-                            fill: false,
-                            tension: 0.1,
-                            pointRadius: 2
-                        },
-                        {
-                            label: '累计净值',
-                            data: totalNetWorthValues,
-                            borderColor: '#2ecc71',
-                            backgroundColor: 'rgba(46, 204, 113, 0.1)',
-                            borderWidth: 2,
-                            fill: false,
-                            tension: 0.1,
-                            pointRadius: 2
-                        }
-                    ]
-                },
-                options: {
-                    responsive: true,
-                    maintainAspectRatio: false,
-                    scales: {
-                        x: {
-                            title: {
-                                display: true,
-                                text: '时间'
+            // 创建图表 - 使用更灵活的数据格式
+            try {
+                // 准备数据点，将标签和值组合成{x,y}格式
+                const netWorthDataPoints = labels.map((label, index) => ({
+                    x: label,
+                    y: netWorthValues[index] !== undefined ? netWorthValues[index] : null
+                })).filter(point => point.y !== null);
+
+                const totalNetWorthDataPoints = labels.map((label, index) => ({
+                    x: label,
+                    y: totalNetWorthValues[index] !== undefined ? totalNetWorthValues[index] : null
+                })).filter(point => point.y !== null);
+
+                console.log('准备的单位净值数据点:', netWorthDataPoints);
+                console.log('准备的累计净值数据点:', totalNetWorthDataPoints);
+
+                window.currentChart = new Chart(chartCtx, {
+                    type: 'line',
+                    data: {
+                        datasets: [
+                            {
+                                label: '单位净值',
+                                data: netWorthDataPoints,
+                                borderColor: '#3498db',
+                                backgroundColor: 'rgba(52, 152, 219, 0.1)',
+                                borderWidth: 2,
+                                fill: false,
+                                tension: 0.1,
+                                pointRadius: 2
                             },
-                            ticks: {
-                                maxRotation: 45,
-                                minRotation: 45
+                            {
+                                label: '累计净值',
+                                data: totalNetWorthDataPoints,
+                                borderColor: '#2ecc71',
+                                backgroundColor: 'rgba(46, 204, 113, 0.1)',
+                                borderWidth: 2,
+                                fill: false,
+                                tension: 0.1,
+                                pointRadius: 2
+                            }
+                        ]
+                    },
+                    options: {
+                        responsive: true,
+                        maintainAspectRatio: false,
+                        scales: {
+                            x: {
+                                type: 'category', // 使用分类轴
+                                title: {
+                                    display: true,
+                                    text: '时间'
+                                },
+                                ticks: {
+                                    maxRotation: 45,
+                                    minRotation: 45
+                                }
+                            },
+                            y: {
+                                title: {
+                                    display: true,
+                                    text: '金额'
+                                },
+                                beginAtZero: false
                             }
                         },
-                        y: {
+                        plugins: {
                             title: {
                                 display: true,
-                                text: '金额'
+                                text: '基金净值走势图'
                             },
-                            beginAtZero: false
-                        }
-                    },
-                    plugins: {
-                        title: {
-                            display: true,
-                            text: '基金净值走势图'
-                        },
-                        legend: {
-                            position: 'top',
+                            legend: {
+                                position: 'top',
+                            }
                         }
                     }
-                }
-            });
+                });
+
+                console.log('图表创建成功');
+            } catch (e) {
+                console.error('创建图表时出错:', e);
+                document.getElementById('fundChartContainer').innerHTML = '<div class="chart-loading">图表渲染失败: ' + e.message + '</div>';
+            }
         }
 
         // 关闭基金详情模态框

@@ -1,7 +1,7 @@
 # app.py
 import os
 from flask import Flask, render_template, jsonify, request
-from datetime import datetime
+from datetime import datetime, timedelta
 import threading
 import json
 import sqlite3
@@ -592,26 +592,6 @@ def manage_fund_settings():
         app_logger.info(f"保存基金设置成功: {data}")
         return jsonify({'success': True, 'settings': data})
 
-@app.route('/api/fund/detail', methods=['GET'])
-def get_fund_detail():
-    code = request.args.get('code')
-    if not code:
-        app_logger.warning("获取基金详情失败: 缺少基金代码")
-        return jsonify({'error': '缺少基金代码'}), 400
-    
-    try:
-        fund_data_list = fetch_fund_price_batch_sync([code])
-        
-        if fund_data_list:
-            app_logger.info(f"获取基金详情成功: {code}")
-            return jsonify(fund_data_list[0])
-        else:
-            app_logger.warning(f"未找到基金详情: {code}")
-            return jsonify({'error': '未找到该基金数据'}), 404
-            
-    except Exception as e:
-        app_logger.error(f"获取基金详情错误: {e}")
-        return jsonify({'error': f'获取基金数据失败: {str(e)}'}), 500
 
 @app.route('/api/fund/watchlist', methods=['GET', 'POST', 'DELETE'])
 def manage_fund_watchlist():

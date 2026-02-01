@@ -738,14 +738,22 @@
             // 加载统计数据
             fetch('/api/fund_trans/summary')
                 .then(res => res.json())
-                .then(data => {
-                    renderSummary(data);
+                .then(summaryData => {
+                    renderSummary(summaryData);
                     // 加载列表数据
                     return fetch('/api/fund_trans/transactions');
                 })
                 .then(res => res.json())
-                .then(data => {
-                    renderTable(data);
+                .then(transactionData => {
+                    // 检查返回的数据结构 - 如果是对象包含transactions数组，则使用transactions
+                    if (transactionData.transactions !== undefined) {
+                        // 数据结构为 {transactions: [...], summary: {...}}
+                        // 注意：我们已经单独获取了summary，所以这里只需要transactions
+                        renderTable(transactionData.transactions);
+                    } else {
+                        // 直接是交易数组
+                        renderTable(transactionData);
+                    }
                     hideLoading();
                 })
                 .catch(err => {
@@ -838,13 +846,20 @@
             const tbody = document.getElementById('tableBody');
             tbody.innerHTML = '';
 
+            // 检查数据是否为数组，如果不是则使用空数组
+            if (!Array.isArray(data)) {
+                console.error('数据格式错误，期望数组格式，实际收到:', typeof data, data);
+                showToast('数据加载失败，请稍后重试', 'error');
+                return;
+            }
+
             // 确保数据按日期降序排序（最新的在最前面）
             // 如果日期格式相同，按ID降序作为备用排序
             const sortedData = [...data].sort((a, b) => {
                 // 尝试将日期字符串转换为可比较的数字
                 const dateA = new Date(a.date).getTime() || 0;
                 const dateB = new Date(b.date).getTime() || 0;
-                
+
                 if (dateA !== dateB) {
                     return dateB - dateA; // 降序：B - A
                 }
@@ -870,7 +885,7 @@
                 // --- 修改点：添加 title 属性以显示备注 ---
                 // 如果备注为空，title 为空字符串（不显示提示）
                 const note = item.note || "";
-                
+
                 tr.innerHTML = `
                     <td>${formatDate(item.date)}</td>
                     <td>${item.name}</td>
@@ -885,10 +900,10 @@
                         <button class="btn btn-danger btn-sm" onclick="deleteRecord(${item.id})">删除</button>
                     </td>
                 `;
-                
+
                 // 设置 tr 的 title 属性
                 tr.title = note;
-                
+
                 tbody.appendChild(tr);
             });
         }
@@ -1147,7 +1162,13 @@
 
         // 页面加载完成后执行初始化
         document.addEventListener('DOMContentLoaded', function() {
-            window.initPage();
+            // 初始化页面，如果父页面有initPage函数则调用它
+            if (typeof window.initPage === 'function') {
+                window.initPage();
+            } else {
+                // 如果没有定义initPage函数，直接加载数据
+                loadData();
+            }
 
             // 监听来自父页面的消息
             window.addEventListener('message', function(event) {

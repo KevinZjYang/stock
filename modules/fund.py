@@ -1,5 +1,6 @@
 # fund.py
 from flask import Blueprint, request, jsonify, make_response, render_template
+from datetime import datetime, timedelta
 import sys
 import os
 import requests
@@ -195,16 +196,24 @@ def search_fund_route():
 @fund_bp.route('/detail', methods=['GET'])
 def get_fund_detail():
     code = request.args.get('code')
+    start_date = request.args.get('startDate')
+    end_date = request.args.get('endDate')
     client_ip = request.remote_addr
-    app_logger.info(f"获取基金详情请求来自: {client_ip}, 基金代码: {code}")
+    app_logger.info(f"获取基金详情请求来自: {client_ip}, 基金代码: {code}, 开始日期: {start_date}, 结束日期: {end_date}")
 
     if not code:
         app_logger.warning(f"获取基金详情失败: 缺少基金代码, IP: {client_ip}")
         return jsonify({'error': '缺少基金代码'}), 400
 
+    # 设置默认日期范围：startDate默认为一个月前，endDate为当前时间
+    if not start_date or not end_date:
+        end_date = datetime.now().strftime('%Y-%m-%d')
+        start_date_obj = datetime.now() - timedelta(days=30)
+        start_date = start_date_obj.strftime('%Y-%m-%d')
+        app_logger.info(f"使用默认日期范围: startDate={start_date}, endDate={end_date}")
+
     try:
-        # 从app.py导入fetch_fund_price_batch_sync函数
-        from app import fetch_fund_price_batch_sync
+        # 使用fetch_fund_price_batch_sync函数获取基础数据
         fund_data_list = fetch_fund_price_batch_sync([code])
 
         if fund_data_list:
@@ -213,7 +222,7 @@ def get_fund_detail():
             # 从基金详情API获取完整的基金数据，包括净值走势图
             # 根据API文档，使用正确的API端点
             detail_api_url = 'https://api.autostock.cn/v1/fund/detail/list'
-            params = {'code': code}
+            params = {'code': code, 'startDate': start_date, 'endDate': end_date}
             headers = {
                 'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/91.0.4472.124 Safari/537.36'
             }
@@ -224,12 +233,12 @@ def get_fund_detail():
             try:
                 detail_response = requests.get('https://api.autostock.cn/v1/fund/detail/list', params=params, headers=headers, timeout=30)
                 detail_response.raise_for_status()
-                detail_data = detail_response.json()
+                detail_response_data = detail_response.json()
 
-                app_logger.info(f"基金详情API响应: {detail_data.get('code', 'NO_CODE')}")
+                app_logger.info(f"基金详情API响应: {detail_response_data.get('code', 'NO_CODE')}")
 
-                if detail_data.get('code') == 0 and detail_data.get('data'):
-                    fund_detail_data = detail_data['data'][0]
+                if detail_response_data.get('code') == 0 and detail_response_data.get('data'):
+                    fund_detail_data = detail_response_data['data'][0]
 
                     # 添加净值走势图数据
                     net_worth_data = fund_detail_data.get('netWorthData', [])
@@ -248,7 +257,7 @@ def get_fund_detail():
                 else:
                     # 如果API调用失败，仍然返回基本数据
                     app_logger.warning(f"获取基金详细数据失败: {code}, 但返回基本数据")
-                    app_logger.warning(f"API响应: {detail_data}")
+                    app_logger.warning(f"API响应: {detail_response_data}")
                     fund_detail['netWorthData'] = []
                     fund_detail['totalNetWorthData'] = []
             except requests.exceptions.RequestException as e:
@@ -260,14 +269,14 @@ def get_fund_detail():
                 fund_detail['netWorthData'] = []
                 fund_detail['totalNetWorthData'] = []
 
-            app_logger.info(f"成功获取基金详情: {code}, IP: {client_ip}")
+            app_logger.info(f"成功获取基金详情: {code}, IP: {request.remote_addr}")
             return jsonify(fund_detail)
         else:
-            app_logger.warning(f"未找到基金详情: {code}, IP: {client_ip}")
+            app_logger.warning(f"未找到基金详情: {code}, IP: {request.remote_addr}")
             return jsonify({'error': '未找到该基金数据'}), 404
 
     except Exception as e:
-        app_logger.error(f"获取基金详情错误: {code}, IP: {client_ip}, 错误: {e}")
+        app_logger.error(f"获取基金详情错误: {code}, IP: {request.remote_addr}, 错误: {e}")
         return jsonify({'error': f'获取基金数据失败: {str(e)}'}), 500
 
 @fund_bp.route('/watchlist', methods=['GET', 'POST', 'DELETE'])
