@@ -157,6 +157,56 @@ def manage_settings():
         app_logger.info(f"保存基金设置成功: {data}")
         return jsonify({'success': True, 'settings': data})
 
+@fund_bp.route('/list', methods=['GET'])
+def get_all_indices():
+    """获取所有指数列表"""
+    from modules.models import get_db_connection
+    conn = get_db_connection()
+    cursor = conn.cursor()
+    cursor.execute('SELECT code, name FROM stocks WHERE market_name = "大盘指数" OR code IN ("000001", "399001", "399006") ORDER BY code')
+    indices = [{'code': row['code'], 'name': row['name']} for row in cursor.fetchall()]
+    conn.close()
+    return jsonify(indices)
+
+@fund_bp.route('/watchlist', methods=['GET', 'POST', 'DELETE'])
+def manage_index_watchlist():
+    """管理指数关注列表"""
+    from modules.models import (
+        load_index_watchlist, add_index_to_watchlist, remove_index_from_watchlist
+    )
+
+    if request.method == 'GET':
+        watchlist = load_index_watchlist()
+        return jsonify(watchlist)
+
+    elif request.method == 'POST':
+        data = request.get_json()
+        if not data or 'code' not in data:
+            return jsonify({'error': '缺少指数代码'}), 400
+
+        code = data['code'].strip()
+        if add_index_to_watchlist(code):
+            app_logger.info(f"添加指数到关注列表: {code}")
+            watchlist = load_index_watchlist()  # 返回更新后的列表
+            return jsonify({'watchlist': watchlist})
+        else:
+            app_logger.warning(f"添加指数失败，不是有效的指数代码: {code}")
+            return jsonify({'error': '不是有效的指数代码'}), 400
+
+    elif request.method == 'DELETE':
+        data = request.get_json()
+        if not data or 'code' not in data:
+            return jsonify({'error': '缺少指数代码'}), 400
+
+        code = data['code'].strip()
+        if remove_index_from_watchlist(code):
+            app_logger.info(f"从指数关注列表移除: {code}")
+            watchlist = load_index_watchlist()  # 返回更新后的列表
+            return jsonify({'watchlist': watchlist})
+        else:
+            app_logger.warning(f"移除指数失败，指数不在关注列表中: {code}")
+            return jsonify({'error': '指数不在关注列表中'}), 400
+
 @fund_bp.route('/init_all_funds', methods=['GET'])
 def init_all_funds():
     """初始化所有基金基础数据"""
