@@ -1453,35 +1453,59 @@ def load_excel_data_to_db():
 # ==================== 项目更新功能 ====================
 
 def check_for_updates():
-    """检查项目是否有更新"""
-    import subprocess
+    """检查项目是否有更新 - 不依赖Git"""
     import json
+    import os
     try:
-        # 获取远程仓库的最新提交信息
-        result = subprocess.run(['git', 'fetch', 'origin'], capture_output=True, text=True, cwd=os.path.dirname(BASE_DIR))
-        if result.returncode != 0:
-            app_logger.error(f"获取远程仓库信息失败: {result.stderr}")
-            return {"has_update": False, "error": result.stderr}
+        # 从远程服务器或GitHub API检查更新
+        # 这里可以检查远程版本文件或GitHub API
+        import requests
 
-        # 检查本地和远程的差异
-        result = subprocess.run(['git', 'status', '-uno'], capture_output=True, text=True, cwd=os.path.dirname(BASE_DIR))
-        if result.returncode != 0:
-            app_logger.error(f"检查仓库状态失败: {result.stderr}")
-            return {"has_update": False, "error": result.stderr}
+        # 从设置中获取仓库信息，如果不存在则使用默认值
+        repo_info = get_setting('repo_info', {})
+        repo_owner = repo_info.get('owner', 'KevinZjYang')  # 实际用户名
+        repo_name = repo_info.get('name', 'stock')  # 实际仓库名
 
-        # 检查是否有需要拉取的更新
-        result = subprocess.run(['git', 'rev-list', 'HEAD..origin/main', '--count'], capture_output=True, text=True, cwd=os.path.dirname(BASE_DIR))
-        if result.returncode != 0:
-            app_logger.error(f"检查更新数量失败: {result.stderr}")
-            return {"has_update": False, "error": result.stderr}
+        # 构建API URL
+        repo_url = f"https://api.github.com/repos/{repo_owner}/{repo_name}/commits/main"
 
-        update_count = int(result.stdout.strip())
-        has_update = update_count > 0
+        # 或者检查一个版本文件
+        version_check_urls = [
+            f"https://raw.githubusercontent.com/{repo_owner}/{repo_name}/main/VERSION",
+            f"https://raw.githubusercontent.com/{repo_owner}/{repo_name}/main/version.txt"
+        ]
+
+        # 检查本地版本信息（如果存在）
+        local_version_file = os.path.join(os.path.dirname(BASE_DIR), 'VERSION')
+        current_version = "unknown"
+        if os.path.exists(local_version_file):
+            with open(local_version_file, 'r', encoding='utf-8') as f:
+                current_version = f.read().strip()
+
+        # 尝试获取远程版本信息
+        remote_version = None
+        for url in version_check_urls:
+            try:
+                response = requests.get(url, timeout=10)
+                if response.status_code == 200:
+                    remote_version = response.text.strip()
+                    break
+            except:
+                continue  # 尝试下一个URL
+
+        # 如果无法获取远程版本，返回无更新
+        if remote_version is None:
+            app_logger.warning("无法获取远程版本信息，假定无更新")
+            return {"has_update": False, "message": "无法获取远程版本信息"}
+
+        # 比较版本（简单字符串比较，实际应使用语义化版本比较）
+        has_update = remote_version != current_version
 
         return {
             "has_update": has_update,
-            "update_count": update_count,
-            "status": result.stdout.strip()
+            "current_version": current_version,
+            "remote_version": remote_version,
+            "message": f"发现新版本: {remote_version}" if has_update else "已是最新版本"
         }
     except Exception as e:
         app_logger.error(f"检查更新时发生错误: {e}")
@@ -1489,28 +1513,79 @@ def check_for_updates():
 
 
 def perform_update():
-    """执行项目更新"""
-    import subprocess
+    """执行项目更新 - 不依赖Git"""
     import sys
     import os
+    import tempfile
+    import zipfile
+    import shutil
     try:
         app_logger.info("开始执行项目更新...")
 
         # 获取当前目录
         current_dir = os.path.dirname(BASE_DIR)
 
-        # 拉取最新代码
-        result = subprocess.run(['git', 'pull', 'origin', 'main'], capture_output=True, text=True, cwd=current_dir)
-        if result.returncode != 0:
-            app_logger.error(f"拉取代码失败: {result.stderr}")
-            return {"success": False, "error": result.stderr, "output": result.stdout}
+        # 从设置中获取仓库信息
+        repo_info = get_setting('repo_info', {})
+        repo_owner = repo_info.get('owner', 'KevinZjYang')  # 实际用户名
+        repo_name = repo_info.get('name', 'stock')  # 实际仓库名
 
-        app_logger.info(f"代码拉取成功: {result.stdout}")
+        # 下载最新的代码包（从GitHub或其他源）
+        import requests
+
+        # 使用GitHub的zipball链接下载最新代码
+        download_url = f"https://github.com/{repo_owner}/{repo_name}/archive/main.zip"
+
+        try:
+            response = requests.get(download_url, stream=True, timeout=30)
+            response.raise_for_status()
+
+            # 创建临时文件保存下载的zip
+            with tempfile.NamedTemporaryFile(delete=False, suffix='.zip') as tmp_file:
+                for chunk in response.iter_content(chunk_size=8192):
+                    tmp_file.write(chunk)
+                temp_zip_path = tmp_file.name
+
+            # 解压到临时目录
+            with tempfile.TemporaryDirectory() as temp_extract_dir:
+                with zipfile.ZipFile(temp_zip_path, 'r') as zip_ref:
+                    zip_ref.extractall(temp_extract_dir)
+
+                # 找到解压后的根目录（GitHub的zip通常包含一个带分支名的根文件夹）
+                extracted_dirs = os.listdir(temp_extract_dir)
+                if extracted_dirs:
+                    extracted_root = os.path.join(temp_extract_dir, extracted_dirs[0])
+
+                    # 将关键文件从新版本复制到当前目录（排除不需要覆盖的文件）
+                    for item in os.listdir(extracted_root):
+                        src_path = os.path.join(extracted_root, item)
+                        dst_path = os.path.join(current_dir, item)
+
+                        # 跳过一些不应被覆盖的文件
+                        if item in ['.git', '__pycache__', 'data', 'logs', 'venv', 'env', '.gitignore', '.env', 'config.json']:
+                            continue
+
+                        if os.path.isdir(src_path):
+                            # 如果目标目录存在，先删除它
+                            if os.path.exists(dst_path):
+                                shutil.rmtree(dst_path)
+                            # 复制整个目录
+                            shutil.copytree(src_path, dst_path)
+                        else:
+                            # 复制文件
+                            shutil.copy2(src_path, dst_path)
+
+                app_logger.info("代码更新成功")
+
+        except Exception as download_error:
+            app_logger.error(f"下载或应用更新失败: {download_error}")
+            return {"success": False, "error": str(download_error)}
 
         # 重新安装依赖（如果requirements.txt有变化）
         requirements_path = os.path.join(current_dir, 'requirements.txt')
         if os.path.exists(requirements_path):
-            result = subprocess.run([sys.executable, '-m', 'pip', 'install', '-r', 'requirements.txt'],
+            import subprocess
+            result = subprocess.run([sys.executable, '-m', 'pip', 'install', '-r', 'requirements.txt', '--upgrade'],
                                   capture_output=True, text=True, cwd=current_dir)
             if result.returncode != 0:
                 app_logger.warning(f"依赖安装有警告: {result.stderr}")
@@ -1520,10 +1595,16 @@ def perform_update():
         # 记录更新时间
         set_setting('last_update_time', datetime.now().isoformat())
 
+        # 清理临时文件
+        try:
+            os.unlink(temp_zip_path)
+        except:
+            pass  # 忽略清理临时文件的错误
+
         return {
             "success": True,
             "message": "更新成功完成",
-            "output": result.stdout
+            "output": "代码和依赖已更新"
         }
     except Exception as e:
         app_logger.error(f"执行更新时发生错误: {e}")
