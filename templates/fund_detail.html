@@ -524,7 +524,7 @@
         async function addFund() {
             const input = document.getElementById('fundCodeInput');
             let code = input.dataset.code; // 优先使用选中的代码
-            
+
             // 如果没有选中代码（用户直接输入），尝试从输入值中提取
             if (!code) {
                 const rawValue = input.value.trim();
@@ -539,16 +539,16 @@
                 }
             }
 
-            if (!code) { 
-                showToast('请输入基金代码', 'warning'); 
-                return; 
+            if (!code) {
+                showToast('请输入基金代码', 'warning');
+                return;
             }
-            
-            if (fundWatchlist.includes(code)) { 
-                showToast(`${code} 已在关注列表中`, 'error'); 
-                return; 
+
+            if (fundWatchlist.includes(code)) {
+                showToast(`${code} 已在关注列表中`, 'error');
+                return;
             }
-            
+
             try {
                 const response = await fetch('/api/fund/watchlist', {
                     method: 'POST',
@@ -562,13 +562,55 @@
                     input.value = '';
                     input.dataset.code = ''; // 清除选中的代码
                     showToast(`成功添加 ${code}`, 'success');
-                    manualRefresh();
+
+                    // 添加基金后立即获取该基金的数据
+                    fetchSingleFundData(code).then(() => {
+                        // 手动刷新整个列表
+                        manualRefresh();
+                    });
                 } else {
                     showToast(result.error, 'error');
                 }
             } catch (error) {
                 console.error('添加基金失败:', error);
                 showToast('添加基金失败', 'error');
+            }
+        }
+
+        // 获取单个基金的数据
+        async function fetchSingleFundData(code) {
+            try {
+                // 首先确保表格中有该基金的行
+                if (!document.getElementById(`row-${code}`)) {
+                    // 如果没有该基金的行，则创建一行
+                    createRow(code);
+                }
+
+                // 获取基金数据
+                const response = await fetch(`/api/fund/prices`);
+                if (!response.ok) {
+                    throw new Error(`HTTP ${response.status}`);
+                }
+
+                const prices = await response.json();
+                const fundData = prices.find(fund => fund.code === code);
+
+                if (fundData) {
+                    // 更新行数据
+                    updateRow(fundData);
+
+                    // 将数据缓存到基金详情缓存中
+                    if (!fundDetailsCache[code]) {
+                        fundDetailsCache[code] = { ...fundData };
+                    } else {
+                        Object.assign(fundDetailsCache[code], fundData);
+                    }
+                } else {
+                    // 如果API没有返回该基金的数据，可能需要稍等片刻再试
+                    console.log(`基金 ${code} 的数据暂时未获取到，可能需要等待API更新`);
+                }
+            } catch (error) {
+                console.error(`获取基金 ${code} 数据失败:`, error);
             }
         }
 
