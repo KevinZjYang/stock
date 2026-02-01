@@ -160,58 +160,94 @@ function Prepare-SourceCode {
         return
     }
 
-    Write-Info "正在从 $RepoUrl 克隆仓库到 $ProjectDir..."
+    Write-Info "正在从 $RepoUrl 克隆仓库到临时目录..."
 
-    if (Test-Path $ProjectDir) {
-        Write-Warning "目标目录 $ProjectDir 已存在，正在备份（保留data目录）..."
-        $backupName = "${ProjectDir}_backup_$(Get-Date -Format 'yyyyMMdd_HHmmss')"
+    # 创建临时目录用于克隆
+    $tempDir = Join-Path $env:TEMP "stock_temp_$(Get-Date -Format 'yyyyMMdd_HHmmss')"
+    New-Item -ItemType Directory -Path $tempDir -Force | Out-Null
 
-        # 创建备份目录
-        $backupDir = New-Item -ItemType Directory -Path $backupName -Force
-
-        # 移动除data目录外的所有内容到备份目录
-        Get-ChildItem -Path $ProjectDir | Where-Object { $_.Name -ne "data" } | ForEach-Object {
-            Move-Item $_.FullName (Join-Path $backupDir $_.Name) -Force
+    try {
+        # 克隆到临时目录
+        $cloneResult = git clone -b $Branch $RepoUrl $tempDir
+        if ($LASTEXITCODE -ne 0) {
+            Write-ErrorCustom "克隆仓库失败"
+            Remove-Item $tempDir -Recurse -Force
+            exit 1
         }
 
-        Write-Success "已备份到 $backupName （data目录除外）"
-    }
+        # 如果目标目录存在，备份它（除了data目录）
+        if (Test-Path $ProjectDir) {
+            Write-Warning "目标目录 $ProjectDir 已存在，正在备份（保留data目录）..."
+            $backupName = "${ProjectDir}_backup_$(Get-Date -Format 'yyyyMMdd_HHmmss')"
 
-    git clone -b $Branch $RepoUrl $ProjectDir
+            # 创建备份目录
+            $backupDir = New-Item -ItemType Directory -Path $backupName -Force
 
-    if ($LASTEXITCODE -ne 0) {
-        Write-ErrorCustom "克隆仓库失败"
-        exit 1
-    }
+            # 移动除data目录外的所有内容到备份目录
+            Get-ChildItem -Path $ProjectDir | Where-Object { $_.Name -ne "data" } | ForEach-Object {
+                Move-Item $_.FullName (Join-Path $backupDir $_.Name) -Force
+            }
 
-    # 恢复data目录内容
-    if ($dataBackupPath -and (Test-Path $dataBackupPath)) {
-        $newDataPath = Join-Path $ProjectDir "data"
-        # 确保新的data目录存在
-        if (!(Test-Path $newDataPath)) {
-            New-Item -ItemType Directory -Path $newDataPath -Force | Out-Null
+            Write-Success "已备份到 $backupName （data目录除外）"
         }
-        # 将备份的data目录内容复制到新的data目录中
-        Get-ChildItem -Path $dataBackupPath | ForEach-Object {
-            $destinationPath = Join-Path $newDataPath $_.Name
-            if (Test-Path $destinationPath) {
-                # 如果目标位置已存在同名项，则跳过或合并（对于目录）
-                if ($_.PSIsContainer) {
-                    # 如果是目录，递归复制内容
+
+        # 将临时目录的内容移动到目标目录
+        if (Test-Path $ProjectDir) {
+            # 如果目标目录已存在（此时只包含data目录），将临时目录的内容复制进去
+            Get-ChildItem -Path $tempDir | ForEach-Object {
+                $destinationPath = Join-Path $ProjectDir $_.Name
+                if ($_.Name -ne "data") {  # 避免与已存在的data目录冲突
+                    if (Test-Path $destinationPath) {
+                        # 如果目标位置已存在，先删除再移动
+                        if ($_.PSIsContainer) {
+                            Remove-Item $destinationPath -Recurse -Force
+                        } else {
+                            Remove-Item $destinationPath -Force
+                        }
+                    }
+                    Move-Item $_.FullName $destinationPath -Force
+                }
+            }
+        } else {
+            # 如果目标目录不存在，直接重命名临时目录
+            Move-Item $tempDir $ProjectDir -Force
+        }
+
+        # 恢复data目录内容
+        if ($dataBackupPath -and (Test-Path $dataBackupPath)) {
+            $newDataPath = Join-Path $ProjectDir "data"
+            # 确保新的data目录存在
+            if (!(Test-Path $newDataPath)) {
+                New-Item -ItemType Directory -Path $newDataPath -Force | Out-Null
+            }
+            # 将备份的data目录内容复制到新的data目录中
+            Get-ChildItem -Path $dataBackupPath | ForEach-Object {
+                $destinationPath = Join-Path $newDataPath $_.Name
+                if (Test-Path $destinationPath) {
+                    # 如果目标位置已存在同名项，则跳过或合并（对于目录）
+                    if ($_.PSIsContainer) {
+                        # 如果是目录，递归复制内容
+                        Copy-Item $_.FullName $destinationPath -Recurse -Force
+                    }
+                    # 如果是文件，默认的Copy-Item会覆盖
+                } else {
+                    # 如果目标位置不存在，则直接复制
                     Copy-Item $_.FullName $destinationPath -Recurse -Force
                 }
-                # 如果是文件，默认的Copy-Item会覆盖
-            } else {
-                # 如果目标位置不存在，则直接复制
-                Copy-Item $_.FullName $destinationPath -Recurse -Force
             }
+            # 删除备份的data目录
+            Remove-Item $dataBackupPath -Force -Recurse
+            Write-Info "已恢复data目录内容"
         }
-        # 删除备份的data目录
-        Remove-Item $dataBackupPath -Force -Recurse
-        Write-Info "已恢复data目录内容"
-    }
 
-    Write-Success "仓库克隆成功"
+        Write-Success "仓库克隆和覆盖成功"
+    }
+    finally {
+        # 清理临时目录
+        if (Test-Path $tempDir) {
+            Remove-Item $tempDir -Recurse -Force
+        }
+    }
 }
 
 # 准备部署目录

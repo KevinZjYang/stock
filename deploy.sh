@@ -198,11 +198,46 @@ prepare_source_code() {
         print_success "已备份到 $backup_name （data目录除外）"
     fi
 
-    git clone -b "$BRANCH" "$REPO_URL" "$PROJECT_DIR"
+    print_info "正在从 $REPO_URL 克隆仓库到临时目录..."
 
-    if [[ $? -ne 0 ]]; then
+    # 创建临时目录用于克隆
+    TEMP_DIR="/tmp/stock_temp_$(date +%Y%m%d_%H%M%S)"
+    mkdir -p "$TEMP_DIR"
+
+    # 克隆到临时目录
+    if git clone -b "$BRANCH" "$REPO_URL" "$TEMP_DIR"; then
+        print_success "仓库克隆到临时目录成功"
+    else
         print_error "克隆仓库失败"
+        rm -rf "$TEMP_DIR"
         exit 1
+    fi
+
+    # 将临时目录的内容移动到目标目录
+    if [[ -d "$PROJECT_DIR" ]]; then
+        # 如果目标目录已存在（此时只包含data目录），将临时目录的内容复制进去
+        for item in "$TEMP_DIR"/*; do
+            if [[ -n "$item" ]]; then
+                item_name=$(basename "$item")
+                destination_path="$PROJECT_DIR/$item_name"
+
+                # 避免与已存在的data目录冲突
+                if [[ "$item_name" != "data" ]]; then
+                    if [[ -e "$destination_path" ]]; then
+                        # 如果目标位置已存在，先删除再移动
+                        if [[ -d "$destination_path" ]]; then
+                            rm -rf "$destination_path"
+                        else
+                            rm -f "$destination_path"
+                        fi
+                    fi
+                    mv "$item" "$destination_path"
+                fi
+            fi
+        done
+    else
+        # 如果目标目录不存在，直接移动临时目录
+        mv "$TEMP_DIR" "$PROJECT_DIR"
     fi
 
     # 恢复data目录内容
@@ -234,7 +269,12 @@ prepare_source_code() {
         print_info "已恢复data目录内容"
     fi
 
-    print_success "仓库克隆成功"
+    # 清理临时目录
+    if [[ -d "$TEMP_DIR" ]]; then
+        rm -rf "$TEMP_DIR"
+    fi
+
+    print_success "仓库克隆和覆盖成功"
 }
 
 # 准备部署目录
