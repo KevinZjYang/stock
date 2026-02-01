@@ -37,104 +37,8 @@ STOCK_API_URL = 'https://stock.xueqiu.com/v5/stock/realtime/quotec.json'
 FUND_BATCH_API_URL = 'https://api.autostock.cn/v1/fund/detail/list'
 
 # ==================== 数据库初始化 ====================
-def init_db():
-    """初始化数据库表"""
-    conn = sqlite3.connect(DATABASE_PATH)
-    cursor = conn.cursor()
-
-    # 创建股票数据表
-    cursor.execute('''
-        CREATE TABLE IF NOT EXISTS stocks (
-            id INTEGER PRIMARY KEY AUTOINCREMENT,
-            code TEXT UNIQUE NOT NULL,
-            name TEXT,
-            market_type TEXT,
-            market_name TEXT,
-            created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
-        )
-    ''')
-
-    # 创建股票关注列表表
-    cursor.execute('''
-        CREATE TABLE IF NOT EXISTS stock_watchlist (
-            id INTEGER PRIMARY KEY AUTOINCREMENT,
-            code TEXT UNIQUE NOT NULL,
-            name TEXT,
-            type TEXT,
-            created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
-        )
-    ''')
-
-    # 为已存在的表添加新字段（如果尚未添加）
-    try:
-        cursor.execute('ALTER TABLE stock_watchlist ADD COLUMN name TEXT')
-        app_logger.info("为stock_watchlist表添加name字段")
-    except sqlite3.OperationalError:
-        app_logger.debug("stock_watchlist表的name字段已存在")  # 如果字段已存在，则忽略错误
-
-    try:
-        cursor.execute('ALTER TABLE stock_watchlist ADD COLUMN type TEXT')
-        app_logger.info("为stock_watchlist表添加type字段")
-    except sqlite3.OperationalError:
-        app_logger.debug("stock_watchlist表的type字段已存在")  # 如果字段已存在，则忽略错误
-
-    # 创建基金关注列表表
-    cursor.execute('''
-        CREATE TABLE IF NOT EXISTS fund_watchlist (
-            id INTEGER PRIMARY KEY AUTOINCREMENT,
-            code TEXT UNIQUE NOT NULL,
-            created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
-        )
-    ''')
-
-    # 创建基金交易记录表
-    cursor.execute('''
-        CREATE TABLE IF NOT EXISTS fund_transactions (
-            id INTEGER PRIMARY KEY AUTOINCREMENT,
-            date TEXT,
-            name TEXT,
-            code TEXT,
-            actual_amount REAL,
-            trade_amount REAL,
-            shares REAL,
-            price REAL,
-            fee REAL,
-            type TEXT,
-            note TEXT,
-            created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
-        )
-    ''')
-
-    # 创建基金基础数据表
-    cursor.execute('''
-        CREATE TABLE IF NOT EXISTS fund_base_data (
-            id INTEGER PRIMARY KEY AUTOINCREMENT,
-            code TEXT UNIQUE NOT NULL,
-            pinyin TEXT,
-            name TEXT,
-            type TEXT,
-            full_pinyin TEXT,
-            created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
-        )
-    ''')
-
-    # 创建系统设置表
-    cursor.execute('''
-        CREATE TABLE IF NOT EXISTS settings (
-            id INTEGER PRIMARY KEY AUTOINCREMENT,
-            key TEXT UNIQUE NOT NULL,
-            value TEXT,
-            created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-            updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
-        )
-    ''')
-
-    # 创建索引以提高查询性能
-    cursor.execute('CREATE INDEX IF NOT EXISTS idx_stocks_code ON stocks(code)')
-    cursor.execute('CREATE INDEX IF NOT EXISTS idx_fund_transactions_code ON fund_transactions(code)')
-
-    conn.commit()
-    conn.close()
+# 从 models 模块导入数据库初始化函数
+from modules.models import init_db, update_database_structure, finalize_database_structure, load_excel_data_to_db
 
 # ==================== 日志系统 ====================
 import logging.handlers
@@ -584,773 +488,31 @@ def load_excel_data_to_db():
         app_logger.error(f"导入Excel数据到数据库失败: {e}")
 
 # ==================== 工具函数 ====================
-
-
-def get_market_type(symbol):
-    """判断股票市场类型"""
-    if len(symbol) == 6 and symbol.isdigit():
-        return 'A股'
-    elif len(symbol) == 5 and symbol.isdigit():
-        return '港股'
-    else:
-        return '未知'
-
-def get_xueqiu_market_prefix(symbol):
-    """根据雪球API规则转换代码"""
-    # 如果代码已经包含前缀，则直接返回
-    if symbol.startswith(('SH', 'SZ', 'HK', 'US')):
-        return symbol
-
-    # 特殊处理某些指数代码
-    if symbol in ['000001', '399001']:
-        return f"SH{symbol}"
-    elif symbol in ['.IXIC', '.DJI', '.SPX', '.INX']:
-        return symbol  # 这些美股指数代码不需要额外前缀
-
-    if len(symbol) == 6 and symbol.isdigit():
-        if symbol.startswith('6'):
-            return f"SH{symbol}"
-        else:
-            return f"SZ{symbol}"
-    elif len(symbol) == 5 and symbol.isdigit():
-        return symbol
-    return symbol
-
-def excel_date_to_str(excel_date):
-    try:
-        date = pd.to_datetime(excel_date, unit='D', origin='1900-01-01')
-        return date.strftime('%Y/%m/%d')
-    except (ValueError, TypeError):
-        return excel_date
+# 从 models 模块导入工具函数
+from modules.models import get_market_type, get_xueqiu_market_prefix, excel_date_to_str, normalize_stock_code
 
 # ==================== 数据服务函数 ====================
-def load_stock_watchlist() -> List[Dict[str, Any]]:
-    """加载股票关注列表"""
-    conn = get_db_connection()
-    cursor = conn.cursor()
-    cursor.execute('SELECT code, name, type FROM stock_watchlist ORDER BY created_at')
-    result = [{'code': row['code'], 'name': row['name'], 'type': row['type']} for row in cursor.fetchall()]
-    conn.close()
-    return result
-
-def add_stock_to_watchlist(code: str, name: str = '', type_val: str = '') -> bool:
-    """添加股票到关注列表"""
-    app_logger.info(f"尝试添加股票到关注列表: 代码={code}, 名称={name}, 类型={type_val}")
-
-    conn = get_db_connection()
-    cursor = conn.cursor()
-
-    # 如果没有提供类型值，从stocks表中获取market_type
-    if not type_val:
-        cursor.execute('SELECT market_type FROM stocks WHERE code = ?', (code,))
-        stock_row = cursor.fetchone()
-        if stock_row:
-            type_val = stock_row['market_type'] or ''
-            app_logger.debug(f"从stocks表获取类型值: {type_val}")
-
-    try:
-        cursor.execute('INSERT INTO stock_watchlist (code, name, type) VALUES (?, ?, ?)', (code, name, type_val))
-        conn.commit()
-        conn.close()
-        app_logger.info(f"成功添加股票到关注列表: {code}")
-        return True
-    except sqlite3.IntegrityError:
-        # 代码已存在
-        conn.close()
-        app_logger.warning(f"股票已在关注列表中，无法重复添加: {code}")
-        return False
-
-def remove_stock_from_watchlist(code: str) -> bool:
-    """从关注列表中移除股票"""
-    conn = get_db_connection()
-    cursor = conn.cursor()
-    cursor.execute('DELETE FROM stock_watchlist WHERE code = ?', (code,))
-    rows_affected = cursor.rowcount
-    conn.commit()
-    conn.close()
-    return rows_affected > 0
-
-def search_stock_by_code(code: str) -> List[Dict[str, Any]]:
-    """在数据库中搜索指定股票代码"""
-    conn = get_db_connection()
-    cursor = conn.cursor()
-
-    clean_code = str(code).strip()
-
-    # 首先尝试精确匹配原始代码
-    cursor.execute('''
-        SELECT code, name, market_type, market_name FROM stocks
-        WHERE code = ?
-    ''', (clean_code,))
-
-    exact_match_rows = cursor.fetchall()
-
-    # 如果没有精确匹配，尝试多种可能的标准化形式
-    if not exact_match_rows and clean_code.isdigit():
-        # 尝试补零到5位（港股）
-        if len(clean_code) < 5:
-            padded_5 = clean_code.zfill(5)
-            cursor.execute('''
-                SELECT code, name, market_type, market_name FROM stocks
-                WHERE code = ?
-            ''', (padded_5,))
-            exact_match_rows = cursor.fetchall()
-
-        # 如果还没找到，尝试补零到6位（A股）
-        if not exact_match_rows and len(clean_code) < 6:
-            padded_6 = clean_code.zfill(6)
-            cursor.execute('''
-                SELECT code, name, market_type, market_name FROM stocks
-                WHERE code = ?
-            ''', (padded_6,))
-            exact_match_rows = cursor.fetchall()
-
-        # 如果还没找到，尝试去掉前导零（从6位到5位）
-        if not exact_match_rows and len(clean_code) == 6 and clean_code.startswith('0'):
-            stripped = clean_code[1:]
-            cursor.execute('''
-                SELECT code, name, market_type, market_name FROM stocks
-                WHERE code = ?
-            ''', (stripped,))
-            exact_match_rows = cursor.fetchall()
-
-    # 模糊匹配代码和名称
-    cursor.execute('''
-        SELECT code, name, market_type, market_name FROM stocks
-        WHERE code LIKE ? OR name LIKE ?
-        LIMIT 20
-    ''', (f'%{clean_code}%', f'%{clean_code}%'))
-
-    fuzzy_match_rows = cursor.fetchall()
-
-    conn.close()
-
-    # 合并结果，避免重复
-    seen_codes = set()
-    results = []
-
-    # 先添加精确匹配的结果
-    for row in exact_match_rows:
-        result = dict(row)
-        if result['code'] not in seen_codes:
-            # 根据市场类型确定类型标识
-            if result['market_name'] == '大盘指数' or result['code'] in ['000001', '399001', '399006']:
-                result['type'] = 'index'
-            elif result['market_type'] == 'SH':
-                result['type'] = 'sh_stock'
-            elif result['market_type'] == 'SZ':
-                result['type'] = 'sz_stock'
-            elif result['market_type'] == 'HK':
-                result['type'] = 'hk_stock'
-            elif result['market_type'] == 'US':
-                result['type'] = 'us_stock'
-            else:
-                result['type'] = 'stock'
-            results.append(result)
-            seen_codes.add(result['code'])
-
-    # 再添加模糊匹配的结果
-    for row in fuzzy_match_rows:
-        result = dict(row)
-        if result['code'] not in seen_codes:
-            # 根据市场类型确定类型标识
-            if result['market_name'] == '大盘指数' or result['code'] in ['000001', '399001', '399006']:
-                result['type'] = 'index'
-            elif result['market_type'] == 'SH':
-                result['type'] = 'sh_stock'
-            elif result['market_type'] == 'SZ':
-                result['type'] = 'sz_stock'
-            elif result['market_type'] == 'HK':
-                result['type'] = 'hk_stock'
-            elif result['market_type'] == 'US':
-                result['type'] = 'us_stock'
-            else:
-                result['type'] = 'stock'
-            results.append(result)
-            seen_codes.add(result['code'])
-
-    return results
-
-def normalize_stock_code(code: str, market_type: str = None) -> str:
-    """
-    标准化股票代码，确保A股为6位数，港股为5位数
-    """
-    # 检查是否为特殊的指数代码格式，如果是则直接返回
-    special_indices = ['.IXIC', '.DJI', '.SPX', '.INX']  # 美股指数
-    if code in special_indices:
-        return code
-
-    # 检查是否为带前缀的指数代码格式
-    if code.startswith(('SH', 'SZ', 'HK', 'US')):
-        # 对于带前缀的代码，检查是否是特殊格式
-        suffix = code[2:]  # 去掉前缀
-        if suffix in special_indices:
-            return code  # 保持原样返回
-
-    # 移除交易所后缀
-    clean_code = code.split('.')[0] if '.' in code else code
-
-    # 如果已经有后缀，获取市场类型
-    if '.' in code and market_type is None:
-        suffix = code.split('.')[-1].upper()
-        if suffix in ['SH', 'SZ']:
-            market_type = 'A股'
-        elif suffix == 'HK':
-            market_type = '港股'
-        elif suffix == 'US':
-            market_type = '美股'
-
-    # 根据市场类型补充前导零
-    if market_type == '美股':
-        # 美股代码不补零，直接返回
-        normalized_code = clean_code
-    elif market_type == '港股' or len(clean_code) == 5:
-        # 港股代码为5位数
-        normalized_code = clean_code.zfill(5)
-    elif market_type == 'A股' or len(clean_code) == 6:
-        # A股代码为6位数
-        normalized_code = clean_code.zfill(6)
-    else:
-        # 默认按A股处理，但要保留特殊格式
-        normalized_code = clean_code.zfill(6) if clean_code.isdigit() else clean_code
-
-    return normalized_code
-
-def get_stock_realtime_data(code: str) -> Optional[Dict[str, Any]]:
-    """获取单个股票实时数据（保留此函数用于兼容性）"""
-    try:
-        # 标准化代码
-        normalized_code = normalize_stock_code(code)
-
-        # 调用批量获取函数，但只传入单个代码
-        result = get_stock_realtime_data_batch([normalized_code])
-        if result and len(result) > 0:
-            return result[0]
-        return None
-    except Exception as e:
-        app_logger.error(f"获取 {code} (雪球) 价格时发生错误: {e}")
-        return None
-
-def get_stock_realtime_data_batch(codes: List[str]) -> List[Dict[str, Any]]:
-    """批量获取股票实时数据"""
-    if not codes:
-        return []
-
-    try:
-        # 标准化所有代码
-        normalized_codes = [normalize_stock_code(code) for code in codes]
-
-        # 获取对应的雪球符号
-        xueqiu_symbols = [get_xueqiu_market_prefix(code) for code in normalized_codes]
-
-        # 打印日志，注意只打印一次
-        app_logger.info(f"开始批量获取股票实时数据: 数量={len(normalized_codes)}, 代码={','.join(normalized_codes[:5])}{'...' if len(normalized_codes) > 5 else ''}")
-
-        # 构建参数，将所有symbol用逗号连接
-        params = {"symbol": ",".join(xueqiu_symbols)}
-
-        headers = {
-            'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36',
-            'Cookie': 'xq_a_token=;'
-        }
-
-        start_time = time.time()
-        response = requests.get(STOCK_API_URL, params=params, headers=headers, timeout=10)
-        response_time = time.time() - start_time
-
-        app_logger.info(f"股票API批量响应时间: {response_time:.2f}s, 状态码: {response.status_code}, 代码数量: {len(normalized_codes)}")
-
-        response.raise_for_status()
-
-        data = response.json()
-
-        if not data or 'data' not in data or not data['data']:
-            app_logger.warning(f"股票API批量返回数据为空")
-            return []
-
-        # 为特殊指数代码定义名称映射
-        index_name_map = {
-            'SH000001': '上证指数',
-            'SZ399001': '深证成指',
-            'SZ399006': '创业板指',
-            'SH000300': '沪深300',
-            'SH000016': '上证50',
-            'SZ399905': '中证500',
-            'SZ399005': '中小板指',
-            'HKHSI': '恒生指数',
-            'HKHSCEI': '国企指数',
-            'HKHSTECH': '恒生科技',
-            '.IXIC': '纳斯达克',
-            '.DJI': '道琼斯',
-            '.INX': '标普500'
-        }
-
-        # 一次性从数据库获取所有股票信息
-        conn = get_db_connection()
-        cursor = conn.cursor()
-
-        # 构建SQL查询，使用占位符
-        placeholders = ','.join(['?' for _ in normalized_codes])
-        cursor.execute(f'SELECT code, name, market_type, market_name FROM stocks WHERE code IN ({placeholders})', normalized_codes)
-        stock_rows = {row['code']: dict(row) for row in cursor.fetchall()}
-        conn.close()
-
-        results = []
-        # 注意：API返回的数据结构是 {"data": [...]}，而不是 {"data": {"items": [...]}}
-        for stock_data in data['data']:
-            symbol = stock_data.get('symbol')
-
-            # 尝试匹配返回的symbol到我们的标准化代码
-            matched_code = None
-            for norm_code in normalized_codes:
-                if symbol == get_xueqiu_market_prefix(norm_code):
-                    matched_code = norm_code
-                    break
-
-            if not matched_code:
-                continue  # 如果找不到匹配的代码，跳过这条数据
-
-            price = stock_data.get('current')
-            change = stock_data.get('chg', 0)
-            change_percent = stock_data.get('percent', 0)
-            open_price = stock_data.get('open')
-            high_price = stock_data.get('high')
-            low_price = stock_data.get('low')
-
-            # 获取股票详细信息
-            row = stock_rows.get(matched_code)
-
-            # 优先使用数据库中的名称，如果没有则使用映射，最后使用代码本身
-            name = row['name'] if row and row['name'] else index_name_map.get(matched_code, matched_code)
-
-            # 根据市场类型确定类型标识
-            type_identifier = 'stock'  # 默认类型
-            if row:
-                if row['market_name'] == '大盘指数' or matched_code in ['000001', '399001', '399006']:
-                    type_identifier = 'index'
-                elif row['market_type'] == 'SH':
-                    type_identifier = 'sh_stock'
-                elif row['market_type'] == 'SZ':
-                    type_identifier = 'sz_stock'
-                elif row['market_type'] == 'HK':
-                    type_identifier = 'hk_stock'
-                elif row['market_type'] == 'US':
-                    type_identifier = 'us_stock'
-                else:
-                    type_identifier = 'stock'
-
-            results.append({
-                'symbol': matched_code,
-                'name': name,
-                'market': get_market_type(matched_code),
-                'type': type_identifier,  # 添加类型字段
-                'price': price,
-                'change': change,
-                'change_percent': change_percent,
-                'open_price': open_price,
-                'high_price': high_price,
-                'low_price': low_price,
-                'currency': 'HKD' if len(matched_code) == 5 else 'CNY'
-            })
-
-        return results
-
-    except Exception as e:
-        app_logger.error(f"批量获取股票价格时发生错误: {e}")
-        return []
+# 从 models 模块导入数据服务函数
+from modules.models import (
+    load_stock_watchlist, add_stock_to_watchlist, remove_stock_from_watchlist,
+    search_stock_by_code, get_stock_realtime_data, get_stock_realtime_data_batch,
+    normalize_stock_code
+)
 
 # ==================== 指数管理功能 ====================
-def load_index_watchlist() -> List[str]:
-    """加载指数关注列表 - 从股票关注列表中筛选指数"""
-    conn = get_db_connection()
-    cursor = conn.cursor()
-    cursor.execute('''
-        SELECT sw.code
-        FROM stock_watchlist sw
-        JOIN stocks s ON sw.code = s.code
-        WHERE s.market_name = '大盘指数'
-        OR s.code IN ('000001', '399001', '399006')
-    ''')
-    result = [row['code'] for row in cursor.fetchall()]
-    conn.close()
-    return result
-
-def add_index_to_watchlist(code: str) -> bool:
-    """添加指数到关注列表"""
-    # 首先检查该代码是否是指数
-    conn = get_db_connection()
-    cursor = conn.cursor()
-    cursor.execute('SELECT code FROM stocks WHERE code = ? AND (market_name = "大盘指数" OR code IN ("000001", "399001", "399006"))', (code,))
-    is_index = cursor.fetchone() is not None
-    conn.close()
-
-    if not is_index:
-        return False  # 不是指数，不能添加
-
-    # 尝试添加到股票关注列表（指数也是股票的一种）
-    return add_stock_to_watchlist(code)
-
-def remove_index_from_watchlist(code: str) -> bool:
-    """从指数关注列表移除"""
-    # 从股票关注列表中移除
-    return remove_stock_from_watchlist(code)
-
-def fetch_fund_price_batch_sync(codes):
-    """同步获取多个基金的价格数据"""
-    try:
-        if not isinstance(codes, list):
-            codes = [codes]
-
-        code_str = ','.join(codes)
-        today = time.strftime('%Y-%m-%d')
-        params = {'code': code_str, 'startDate': today}
-        headers = {'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36'}
-
-        app_logger.info(f"开始批量获取基金数据: 数量={len(codes)}, 代码={code_str}")
-
-        start_time = time.time()
-        response = requests.get(FUND_BATCH_API_URL, params=params, headers=headers, timeout=20)
-        response_time = time.time() - start_time
-
-        app_logger.info(f"基金API响应时间: {response_time:.2f}s, 状态码: {response.status_code}, 请求代码: {code_str}")
-
-        response.raise_for_status()
-
-        data = response.json()
-
-        if not data or 'data' not in data:
-            app_logger.error(f"基金API返回数据为空或格式错误: {code_str}")
-            return []
-
-        def to_float(value):
-            if value is None: return None
-            try:
-                if isinstance(value, str): value = value.replace('%', '').strip()
-                return float(value)
-            except (ValueError, TypeError): return None
-
-        fund_data_list = []
-        for fund_data in data['data']:
-            code = str(fund_data.get('code', ''))
-
-            fund_info = {
-                'code': code,
-                'name': fund_data.get('name', '--'),
-                'type': fund_data.get('type', '--'),
-                'netWorth': to_float(fund_data.get('netWorth')),
-                'expectWorth': to_float(fund_data.get('expectWorth')),
-                'totalWorth': to_float(fund_data.get('totalWorth')),
-                'expectGrowth': to_float(fund_data.get('expectGrowth')),
-                'dayGrowth': to_float(fund_data.get('dayGrowth')),
-                'lastWeekGrowth': to_float(fund_data.get('lastWeekGrowth')),
-                'lastMonthGrowth': to_float(fund_data.get('lastMonthGrowth')),
-                'lastThreeMonthsGrowth': to_float(fund_data.get('lastThreeMonthsGrowth')),
-                'lastSixMonthsGrowth': to_float(fund_data.get('lastSixMonthsGrowth')),
-                'lastYearGrowth': to_float(fund_data.get('lastYearGrowth')),
-                'buyMin': fund_data.get('buyMin'),
-                'buySourceRate': fund_data.get('buySourceRate'),
-                'buyRate': fund_data.get('buyRate'),
-                'manager': fund_data.get('manager'),
-                'fundScale': fund_data.get('fundScale'),
-                'netWorthDate': fund_data.get('netWorthDate'),
-                'expectWorthDate': fund_data.get('expectWorthDate'),
-                # 添加格式化的日期信息，便于前端显示
-                'netWorthDisplay': f"{to_float(fund_data.get('netWorth'))}<br><small>{fund_data.get('netWorthDate', '')}</small>" if fund_data.get('netWorth') else "--",
-                'expectWorthDisplay': f"{to_float(fund_data.get('expectWorth'))}<br><small>{fund_data.get('expectWorthDate', '')}</small>" if fund_data.get('expectWorth') else "--"
-            }
-            fund_data_list.append(fund_info)
-        return fund_data_list
-
-    except requests.exceptions.Timeout:
-        app_logger.error(f"批量获取基金错误: 请求超时 (20秒)")
-        return []
-    except Exception as e:
-        app_logger.error(f"批量获取基金错误: {e}")
-        return []
+# 从 models 模块导入指数管理函数
+from modules.models import (
+    load_index_watchlist, add_index_to_watchlist, remove_index_from_watchlist,
+    fetch_fund_price_batch_sync
+)
 
 
-def load_fund_transactions():
-    """加载基金交易记录"""
-    conn = get_db_connection()
-    cursor = conn.cursor()
-    cursor.execute('SELECT * FROM fund_transactions ORDER BY date DESC, id DESC')
-    rows = cursor.fetchall()
-    transactions = []
-    for row in rows:
-        transaction = dict(row)
-        # 将数据库中的值转换为适当的类型
-        for key in ['actual_amount', 'trade_amount', 'shares', 'price', 'fee']:
-            if transaction[key] is not None:
-                transaction[key] = float(transaction[key])
-        transactions.append(transaction)
-    conn.close()
-    return transactions
-
-def add_fund_transaction(transaction):
-    """添加基金交易记录"""
-    app_logger.info(f"尝试添加基金交易记录: 代码={transaction.get('code', 'N/A')}, 类型={transaction.get('type', 'N/A')}, 金额={transaction.get('actual_amount', 0)}")
-
-    conn = get_db_connection()
-    cursor = conn.cursor()
-    try:
-        cursor.execute('''
-            INSERT INTO fund_transactions
-            (date, name, code, actual_amount, trade_amount, shares, price, fee, type, note)
-            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
-        ''', (
-            transaction.get('date'), transaction.get('name'), transaction.get('code'),
-            transaction.get('actual_amount'), transaction.get('trade_amount'), transaction.get('shares'),
-            transaction.get('price'), transaction.get('fee'), transaction.get('type'), transaction.get('note')
-        ))
-        conn.commit()
-        transaction_id = cursor.lastrowid
-        conn.close()
-        app_logger.info(f"成功添加基金交易记录: ID={transaction_id}, 代码={transaction.get('code', 'N/A')}")
-        return transaction_id
-    except Exception as e:
-        conn.close()
-        app_logger.error(f"添加基金交易记录失败: 代码={transaction.get('code', 'N/A')}, 错误={e}")
-        return None
-
-def update_fund_transaction(transaction_id, transaction):
-    """更新基金交易记录"""
-    conn = get_db_connection()
-    cursor = conn.cursor()
-    try:
-        cursor.execute('''
-            UPDATE fund_transactions
-            SET date=?, name=?, code=?, actual_amount=?, trade_amount=?, shares=?, price=?, fee=?, type=?, note=?
-            WHERE id=?
-        ''', (
-            transaction.get('date'), transaction.get('name'), transaction.get('code'),
-            transaction.get('actual_amount'), transaction.get('trade_amount'), transaction.get('shares'),
-            transaction.get('price'), transaction.get('fee'), transaction.get('type'), transaction.get('note'),
-            transaction_id
-        ))
-        conn.commit()
-        rows_affected = cursor.rowcount
-        conn.close()
-        return rows_affected > 0
-    except Exception as e:
-        conn.close()
-        app_logger.error(f"更新基金交易记录失败: {e}")
-        return False
-
-def delete_fund_transaction(transaction_id):
-    """删除基金交易记录"""
-    conn = get_db_connection()
-    cursor = conn.cursor()
-    cursor.execute('DELETE FROM fund_transactions WHERE id = ?', (transaction_id,))
-    rows_affected = cursor.rowcount
-    conn.commit()
-    conn.close()
-    return rows_affected > 0
-
-def clear_all_fund_transactions():
-    """清空所有基金交易记录"""
-    conn = get_db_connection()
-    cursor = conn.cursor()
-    cursor.execute('DELETE FROM fund_transactions')
-    conn.commit()
-    conn.close()
-
-def calculate_fund_summary(transactions):
-    """计算基金交易汇总数据"""
-    if not transactions:
-        return {
-            "total_shares": 0, "total_cost": 0, "realized_profit": 0,
-            "dividend_total": 0, "buy_count": 0, "sell_count": 0,
-            "dividend_count": 0, "trade_count": 0, "total_fee": 0,
-            "market_value": 0  # 添加市值字段
-        }
-
-    holdings = {}
-    realized_profit = 0
-    dividend_total = 0
-    buy_count = 0
-    sell_count = 0
-    dividend_count = 0
-    total_fee = 0
-
-    for t in transactions:
-        code = t.get('code')
-        t_type = t.get('type')
-
-        shares = float(t.get('shares', 0)) if t.get('shares') is not None else 0
-        amount = float(t.get('actual_amount', 0)) if t.get('actual_amount') is not None else 0
-        fee = float(t.get('fee', 0)) if t.get('fee') is not None else 0
-
-        total_fee += fee
-
-        if t_type == '买入':
-            buy_count += 1
-            if code not in holdings:
-                holdings[code] = {'shares': 0, 'cost': 0}
-
-            holdings[code]['shares'] += shares
-            holdings[code]['cost'] += (abs(amount) + fee)
-
-        elif t_type == '卖出':
-            sell_count += 1
-            if code in holdings and holdings[code]['shares'] > 0:
-                avg_cost_per_share = holdings[code]['cost'] / holdings[code]['shares']
-                sell_cost = shares * avg_cost_per_share
-                sell_income = abs(amount) - fee
-                realized_profit += (sell_income - sell_cost)
-                holdings[code]['shares'] -= shares
-                holdings[code]['cost'] -= sell_cost
-
-                if holdings[code]['shares'] <= 0.0001:
-                    del holdings[code]
-
-        elif t_type == '分红':
-            dividend_count += 1
-            dividend_total += abs(amount)
-            realized_profit += abs(amount)
-
-    total_shares = sum(h['shares'] for h in holdings.values())
-    total_cost = sum(h['cost'] for h in holdings.values())
-    total_cost = abs(total_cost)
-
-    # 注意：market_value需要通过实时API获取，这里暂时设为0
-    # 在实际应用中，可能需要调用基金API获取当前净值来计算市值
-    market_value = 0
-
-    return {
-        "total_shares": round(total_shares, 2),
-        "total_cost": round(total_cost, 2),
-        "realized_profit": round(realized_profit, 2),
-        "dividend_total": round(dividend_total, 2),
-        "total_fee": round(total_fee, 2),
-        "market_value": round(market_value, 2),  # 添加市值
-        "buy_count": buy_count,
-        "sell_count": sell_count,
-        "dividend_count": dividend_count,
-        "trade_count": len(transactions)
-    }
-
-def import_excel_transactions(file_stream):
-    try:
-        df = pd.read_excel(file_stream, header=0)
-        
-        if df.empty:
-            return {"success": False, "message": "Excel 文件为空"}
-        
-        transactions = load_fund_transactions()
-        new_records = []
-        
-        current_max_id = max([t.get('id', 0) for t in transactions], default=0)
-        
-        column_map = {
-            '日期': 'date', '名称': 'name', '基金代码': 'code',
-            '实际金额': 'actual_amount', '买入/卖出/分红金额': 'trade_amount',
-            '买入/卖出份额': 'shares', '确认价格': 'price', '手续费': 'fee', '备注': 'note'
-        }
-        
-        missing_cols = [col for col in column_map.keys() if col not in df.columns]
-        if missing_cols:
-            return {"success": False, "message": f"Excel 缺少必要列: {', '.join(missing_cols)}"}
-        
-        df.rename(columns=column_map, inplace=True)
-        
-        for index, row in df.iterrows():
-            try:
-                raw_date = row['date']
-                if pd.isna(raw_date):
-                    date_str = ""
-                elif isinstance(raw_date, (int, float)):
-                    date_str = excel_date_to_str(raw_date)
-                else:
-                    date_str = str(raw_date).replace('-', '/')
-                
-                actual_amount = abs(float(row['actual_amount']) if pd.notna(row['actual_amount']) else 0.0)
-                shares = abs(float(row['shares']) if pd.notna(row['shares']) else 0.0)
-                fee = abs(float(row['fee']) if pd.notna(row['fee']) else 0.0)
-                
-                trade_type = '买入'
-                note = str(row['note']) if pd.notna(row['note']) else ""
-                
-                if note:
-                    note_lower = note.lower()
-                    if '卖出' in note_lower:
-                        trade_type = '卖出'
-                    elif '分红' in note_lower:
-                        trade_type = '分红'
-                    elif '买入' in note_lower:
-                        trade_type = '买入'
-                
-                if trade_type == '买入' and shares == 0 and actual_amount > 0:
-                    trade_type = '分红'
-                
-                record = {
-                    "id": current_max_id + index + 1,
-                    "date": date_str,
-                    "name": str(row['name']) if pd.notna(row['name']) else "",
-                    "code": str(row['code']) if pd.notna(row['code']) else "",
-                    "actual_amount": actual_amount,
-                    "trade_amount": float(row['trade_amount']) if pd.notna(row['trade_amount']) else 0.0,
-                    "shares": shares,
-                    "price": float(row['price']) if pd.notna(row['price']) else 0.0,
-                    "fee": fee,
-                    "type": trade_type,
-                    "note": note
-                }
-                new_records.append(record)
-            except Exception as e:
-                app_logger.error(f"跳过第 {index + 2} 行（Excel行号），解析错误: {e}")
-                continue
-        
-        if not new_records:
-            return {"success": False, "message": "未解析到有效数据"}
-            
-        transactions.extend(new_records)
-        if save_fund_transactions(transactions):
-            return {"success": True, "message": f"成功导入 {len(new_records)} 条记录"}
-        else:
-            return {"success": False, "message": "保存数据失败"}
-            
-    except ImportError:
-        return {"success": False, "message": "缺少 pandas 库，请安装: pip install pandas openpyxl"}
-    except Exception as e:
-        app_logger.error(f"导入失败: {str(e)}")
-        return {"success": False, "message": f"导入失败: {str(e)}"}
-
-def export_excel_transactions():
-    try:
-        transactions = load_fund_transactions()
-        if not transactions:
-            return None, "没有数据可导出"
-        
-        df = pd.DataFrame(transactions)
-        
-        columns = ['date', 'name', 'code', 'actual_amount', 'trade_amount', 'shares', 'price', 'fee', 'type', 'note']
-        existing_columns = [col for col in columns if col in df.columns]
-        df = df[existing_columns]
-        
-        column_map = {
-            'date': '日期', 'name': '名称', 'code': '代码', 'actual_amount': '实际金额',
-            'trade_amount': '交易金额', 'shares': '份额', 'price': '价格', 'fee': '手续费',
-            'type': '类型', 'note': '备注'
-        }
-        df.rename(columns=column_map, inplace=True)
-        
-        timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
-        filename = f"fund_transactions_{timestamp}.xlsx"
-        
-        from io import BytesIO
-        output = BytesIO()
-        
-        with pd.ExcelWriter(output, engine='openpyxl') as writer:
-            df.to_excel(writer, index=False, sheet_name='交易记录')
-        
-        output.seek(0)
-        return output, filename
-        
-    except ImportError:
-        return None, "缺少 pandas 库，请安装: pip install pandas openpyxl"
-    except Exception as e:
-        app_logger.error(f"导出失败: {str(e)}")
-        return None, f"导出失败: {str(e)}"
+# 从 models 模块导入基金交易相关函数
+from modules.models import (
+    load_fund_transactions, add_fund_transaction, update_fund_transaction,
+    delete_fund_transaction, clear_all_fund_transactions, calculate_fund_summary,
+    import_excel_transactions, export_excel_transactions
+)
 
 # 标记是否已初始化
 _initialized = False
@@ -1396,36 +558,8 @@ def load_fund_watchlist():
     conn.close()
     return result
 
-def get_setting(key, default=None):
-    """获取设置值"""
-    conn = get_db_connection()
-    cursor = conn.cursor()
-    cursor.execute('SELECT value FROM settings WHERE key = ?', (key,))
-    row = cursor.fetchone()
-    conn.close()
-    if row:
-        try:
-            return json.loads(row['value'])
-        except:
-            return row['value']
-    return default
-
-def set_setting(key, value):
-    """设置值"""
-    conn = get_db_connection()
-    cursor = conn.cursor()
-    try:
-        cursor.execute('''
-            INSERT OR REPLACE INTO settings (key, value, updated_at)
-            VALUES (?, ?, CURRENT_TIMESTAMP)
-        ''', (key, json.dumps(value)))
-        conn.commit()
-        conn.close()
-        return True
-    except Exception as e:
-        conn.close()
-        app_logger.error(f"保存设置失败 {key}: {e}")
-        return False
+# 从 models 模块导入设置相关函数
+from modules.models import get_setting, set_setting
 
 @app.route('/api/fund/settings', methods=['GET', 'POST'])
 def manage_fund_settings():
@@ -1750,13 +884,13 @@ def clear_log_list():
     app_logger.info(f"系统日志已清空, IP: {client_ip}")
     return jsonify({'success': True, 'message': '日志已清空'})
 
-# ==================== ���面路由 ====================
+# ==================== ����面路由 ====================
 @app.route('/')
 def index():
     return render_template('master.html')
 
 
-# ==================== 价格变动通知功能 ====================
+# ==================== 价格变��通知功能 ====================
 # 通知条件表
 def init_notification_db():
     """初始化通知条件表"""
@@ -2099,51 +1233,59 @@ init_notification_db()
 try:
     from modules.stock_module import stock_bp
     app.register_blueprint(stock_bp, url_prefix='/api/stock')
-except ImportError:
-    print("Warning: Could not import stock_module blueprint")
+    print("Successfully imported stock_module blueprint")
+except ImportError as e:
+    print(f"Warning: Could not import stock_module blueprint: {e}")
 
 try:
     from modules.fund import fund_bp
     app.register_blueprint(fund_bp, url_prefix='/api/fund')
-except ImportError:
-    print("Warning: Could not import fund blueprint")
+    print("Successfully imported fund blueprint")
+except ImportError as e:
+    print(f"Warning: Could not import fund blueprint: {e}")
 
 try:
     from modules.fund_trans import fund_trans_bp
     app.register_blueprint(fund_trans_bp, url_prefix='/api/fund_trans')
-except ImportError:
-    print("Warning: Could not import fund_trans blueprint")
+    print("Successfully imported fund_trans blueprint")
+except ImportError as e:
+    print(f"Warning: Could not import fund_trans blueprint: {e}")
 
 try:
     from modules.notify import notify_bp
     app.register_blueprint(notify_bp)
-except ImportError:
-    print("Warning: Could not import notify blueprint")
+    print("Successfully imported notify blueprint")
+except ImportError as e:
+    print(f"Warning: Could not import notify blueprint: {e}")
 
 # 注册页面路由
 try:
     from modules.stock_module import stock_page
     app.add_url_rule('/stock_page', 'stock_page', stock_page)
-except ImportError:
-    print("Warning: Could not import stock_page route")
+    print("Successfully imported stock_page route")
+except ImportError as e:
+    print(f"Warning: Could not import stock_page route: {e}")
 
 try:
     from modules.fund import fund_page
     app.add_url_rule('/fund_page', 'fund_page', fund_page)
-except ImportError:
-    print("Warning: Could not import fund_page route")
+    print("Successfully imported fund_page route")
+except ImportError as e:
+    print(f"Warning: Could not import fund_page route: {e}")
 
 try:
     from modules.fund_trans import fund_trans_page
     app.add_url_rule('/fund_trans_page', 'fund_trans_page', fund_trans_page)
-except ImportError:
-    print("Warning: Could not import fund_trans_page route")
+    print("Successfully imported fund_trans_page route")
+except ImportError as e:
+    print(f"Warning: Could not import fund_trans_page route: {e}")
 
 try:
     from modules.notify import notification_page
     app.add_url_rule('/notification_page', 'notification_page', notification_page)
-except ImportError:
-    print("Warning: Could not import notification_page route")
+    print("Successfully imported notification_page route")
+except ImportError as e:
+    print(f"Warning: Could not import notification_page route: {e}")
 
 
 if __name__ == '__main__':

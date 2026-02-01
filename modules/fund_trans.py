@@ -2,13 +2,13 @@
 from flask import Blueprint, request, jsonify, make_response, render_template, send_file
 import sys
 import os
-# 添加上级目录到路径，以便导入 app.py
+# 添加上级目录到路径，以便导入 models.py
 sys.path.append(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
-from app import (
+from modules.models import (
     load_fund_transactions, calculate_fund_summary,
     import_excel_transactions, export_excel_transactions, app_logger,
-    add_fund_transaction, update_fund_transaction, delete_fund_transaction
+    add_fund_transaction, update_fund_transaction, delete_fund_transaction, get_db_connection
 )
 
 fund_trans_bp = Blueprint('fund_trans', __name__)

@@ -6,10 +6,10 @@ import requests
 import time
 import sqlite3
 from typing import List, Dict, Any
-# 添加上级目录到路径，以便导入 app.py
+# 添加上级目录到路径，以便导入 models.py
 sys.path.append(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
-from app import (
+from modules.models import (
     load_fund_watchlist, fetch_fund_price_batch_sync,
     CACHE_EXPIRY, get_setting, set_setting, app_logger, get_db_connection
 )

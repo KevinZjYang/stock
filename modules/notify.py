@@ -2,10 +2,10 @@
 from flask import Blueprint, request, jsonify, render_template, make_response
 import sys
 import os
-# 添加上级目录到路径，以便导入 app.py
+# 添加上级目录到路径，以便导入 models.py
 sys.path.append(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
-from app import (
+from modules.models import (
     init_notification_db, add_price_notification, get_price_notifications,
     remove_notification, set_webhook_url, get_webhook_url,
     check_price_notifications, notification_monitor, app_logger, get_db_connection

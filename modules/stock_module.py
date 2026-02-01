@@ -1,11 +1,11 @@
-# stock.py
+# stock_module.py
 from flask import Blueprint, request, jsonify, make_response, render_template
 import sys
 import os
-# 添加上级目录到路径，以便导入 app.py
+# 添加上级目录到路径，以便导入 models.py
 sys.path.append(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
-from app import (
+from modules.models import (
     load_stock_watchlist, add_stock_to_watchlist, remove_stock_from_watchlist,
     search_stock_by_code, get_stock_realtime_data, get_stock_realtime_data_batch,
     app_logger, get_db_connection, set_setting
