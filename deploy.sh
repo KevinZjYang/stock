@@ -73,6 +73,15 @@ check_prerequisites() {
 
 # 克隆远程仓库或准备本地目录
 prepare_source_code() {
+    # 检查目标目录是否存在以及是否包含data目录
+    DATA_BACKUP_PATH=""
+    if [[ -d "$PROJECT_DIR" && -d "$PROJECT_DIR/data" ]]; then
+        # 备份data目录
+        DATA_BACKUP_PATH="$PROJECT_DIR/data_backup_$(date +%Y%m%d_%H%M%S)"
+        cp -r "$PROJECT_DIR/data" "$DATA_BACKUP_PATH"
+        print_info "已备份data目录到 $DATA_BACKUP_PATH"
+    fi
+
     if [[ -z "$REPO_URL" ]]; then
         print_info "使用本地目录作为源代码"
 
@@ -90,22 +99,46 @@ prepare_source_code() {
             print_warning "当前目录缺少以下关键文件: ${missing_files[*]}"
             print_info "将创建新的项目目录结构"
 
-            # 如果ProjectDir已存在，备份它
+            # 如果ProjectDir已存在，备份它（除了data目录）
             if [[ -d "$PROJECT_DIR" ]]; then
-                print_warning "目标目录 $PROJECT_DIR 已存在，正在备份..."
-                mv "$PROJECT_DIR" "${PROJECT_DIR}_backup_$(date +%Y%m%d_%H%M%S)"
-                print_success "已备份到 ${PROJECT_DIR}_backup_$(date +%Y%m%d_%H%M%S)"
+                print_warning "目标目录 $PROJECT_DIR 已存在，正在备份（保留data目录）..."
+                local backup_name="${PROJECT_DIR}_backup_$(date +%Y%m%d_%H%M%S)"
+
+                # 创建备份目录
+                mkdir -p "$backup_name"
+
+                # 移动除data目录外的所有内容到备份目录
+                for item in "$PROJECT_DIR"/*; do
+                    if [[ "$(basename "$item")" != "data" ]]; then
+                        mv "$item" "$backup_name/"
+                    fi
+                done
+
+                # 同时移动隐藏文件（除了.和..）
+                for item in "$PROJECT_DIR"/.[^.]*; do
+                    if [[ -n "$item" && "$(basename "$item")" != "." && "$(basename "$item")" != ".." && "$(basename "$item")" != "./data" ]]; then
+                        mv "$item" "$backup_name/"
+                    fi
+                done
+
+                print_success "已备份到 $backup_name （data目录除外）"
             fi
 
-            # 创建新目录并进入
+            # 创建新目录
             mkdir -p "$PROJECT_DIR"
 
-            # 复制当前目录的所有内容到新目录
-            shopt -s dotglob  # 包括隐藏文件
-            cp -r * .* "$PROJECT_DIR"/ 2>/dev/null || true
-            # 删除可能复制过来的备份目录
-            rm -rf "$PROJECT_DIR/${PROJECT_DIR}_backup_"*
-            shopt -u dotglob  # 关闭包括隐藏文件的选项
+            # 复制当前目录的所有内容到新目录（除了data目录和目标项目目录）
+            for item in *; do
+                if [[ "$item" != "data" && "$item" != "$PROJECT_DIR" ]]; then
+                    cp -r "$item" "$PROJECT_DIR/"
+                fi
+            done
+
+            # 恢复data目录
+            if [[ -n "$DATA_BACKUP_PATH" && -d "$DATA_BACKUP_PATH" ]]; then
+                mv "$DATA_BACKUP_PATH" "$PROJECT_DIR/data"
+                print_info "已恢复data目录"
+            fi
 
             # 切换到项目目录
             cd "$PROJECT_DIR"
@@ -119,9 +152,27 @@ prepare_source_code() {
     print_info "正在从 $REPO_URL 克隆仓库到 $PROJECT_DIR..."
 
     if [[ -d "$PROJECT_DIR" ]]; then
-        print_warning "目标目录 $PROJECT_DIR 已存在，正在备份..."
-        mv "$PROJECT_DIR" "${PROJECT_DIR}_backup_$(date +%Y%m%d_%H%M%S)"
-        print_success "已备份到 ${PROJECT_DIR}_backup_$(date +%Y%m%d_%H%M%S)"
+        print_warning "目标目录 $PROJECT_DIR 已存在，正在备份（保留data目录）..."
+        local backup_name="${PROJECT_DIR}_backup_$(date +%Y%m%d_%H%M%S)"
+
+        # 创建备份目录
+        mkdir -p "$backup_name"
+
+        # 移动除data目录外的所有内容到备份目录
+        for item in "$PROJECT_DIR"/*; do
+            if [[ "$(basename "$item")" != "data" ]]; then
+                mv "$item" "$backup_name/"
+            fi
+        done
+
+        # 同时移动隐藏文件（除了.和..）
+        for item in "$PROJECT_DIR"/.[^.]*; do
+            if [[ -n "$item" && "$(basename "$item")" != "." && "$(basename "$item")" != ".." && "$(basename "$item")" != "./data" ]]; then
+                mv "$item" "$backup_name/"
+            fi
+        done
+
+        print_success "已备份到 $backup_name （data目录除外）"
     fi
 
     git clone -b "$BRANCH" "$REPO_URL" "$PROJECT_DIR"
@@ -129,6 +180,12 @@ prepare_source_code() {
     if [[ $? -ne 0 ]]; then
         print_error "克隆仓库失败"
         exit 1
+    fi
+
+    # 恢复data目录
+    if [[ -n "$DATA_BACKUP_PATH" && -d "$DATA_BACKUP_PATH" ]]; then
+        mv "$DATA_BACKUP_PATH" "$PROJECT_DIR/data"
+        print_info "已恢复data目录"
     fi
 
     print_success "仓库克隆成功"

@@ -75,6 +75,18 @@ function Check-Prerequisites {
 
 # 克隆远程仓库或准备本地目录
 function Prepare-SourceCode {
+    # 检查目标目录是否存在以及是否包含data目录
+    $dataBackupPath = $null
+    if (Test-Path $ProjectDir) {
+        $dataPath = Join-Path $ProjectDir "data"
+        if (Test-Path $dataPath) {
+            # 备份data目录
+            $dataBackupPath = Join-Path $ProjectDir "data_backup_$(Get-Date -Format 'yyyyMMdd_HHmmss')"
+            Copy-Item $dataPath $dataBackupPath -Recurse -Force
+            Write-Info "已备份data目录到 $dataBackupPath"
+        }
+    }
+
     if (-not $RepoUrl) {
         Write-Info "使用本地目录作为源代码"
 
@@ -91,20 +103,32 @@ function Prepare-SourceCode {
             Write-Warning "当前目录缺少以下关键文件: $($missingFiles -join ', ')"
             Write-Info "将创建新的项目目录结构"
 
-            # 如果ProjectDir已存在，备份它
+            # 如果ProjectDir已存在，备份它（除了data目录）
             if (Test-Path $ProjectDir) {
-                Write-Warning "目标目录 $PROJECT_DIR 已存在，正在备份..."
+                Write-Warning "目标目录 $ProjectDir 已存在，正在备份（保留data目录）..."
                 $backupName = "${ProjectDir}_backup_$(Get-Date -Format 'yyyyMMdd_HHmmss')"
-                Move-Item $ProjectDir $backupName
-                Write-Success "已备份到 $backupName"
+
+                # 移动除data目录外的所有内容到备份目录
+                $backupDir = New-Item -ItemType Directory -Path $backupName -Force
+                Get-ChildItem -Path $ProjectDir | Where-Object { $_.Name -ne "data" } | ForEach-Object {
+                    Move-Item $_.FullName (Join-Path $backupDir $_.Name) -Force
+                }
+                Write-Success "已备份到 $backupName （data目录除外）"
             }
 
             # 创建新目录
             New-Item -ItemType Directory -Path $ProjectDir -Force | Out-Null
 
-            # 复制当前目录的所有内容到新目录
-            Get-ChildItem -Path "." -Exclude $ProjectDir | ForEach-Object {
+            # 复制当前目录的所有内容到新目录（除了data目录）
+            Get-ChildItem -Path "." | Where-Object { $_.Name -ne "data" -and $_.Name -ne $ProjectDir } | ForEach-Object {
                 Copy-Item $_.FullName -Destination $ProjectDir -Recurse -Force
+            }
+
+            # 恢复data目录
+            if ($dataBackupPath -and (Test-Path $dataBackupPath)) {
+                Copy-Item $dataBackupPath (Join-Path $ProjectDir "data") -Recurse -Force
+                Remove-Item $dataBackupPath -Force -Recurse
+                Write-Info "已恢复data目录"
             }
 
             # 切换到项目目录
@@ -119,10 +143,18 @@ function Prepare-SourceCode {
     Write-Info "正在从 $RepoUrl 克隆仓库到 $ProjectDir..."
 
     if (Test-Path $ProjectDir) {
-        Write-Warning "目标目录 $ProjectDir 已存在，正在备份..."
+        Write-Warning "目标目录 $ProjectDir 已存在，正在备份（保留data目录）..."
         $backupName = "${ProjectDir}_backup_$(Get-Date -Format 'yyyyMMdd_HHmmss')"
-        Move-Item $ProjectDir $backupName
-        Write-Success "已备份到 $backupName"
+
+        # 创建备份目录
+        $backupDir = New-Item -ItemType Directory -Path $backupName -Force
+
+        # 移动除data目录外的所有内容到备份目录
+        Get-ChildItem -Path $ProjectDir | Where-Object { $_.Name -ne "data" } | ForEach-Object {
+            Move-Item $_.FullName (Join-Path $backupDir $_.Name) -Force
+        }
+
+        Write-Success "已备份到 $backupName （data目录除外）"
     }
 
     git clone -b $Branch $RepoUrl $ProjectDir
@@ -130,6 +162,13 @@ function Prepare-SourceCode {
     if ($LASTEXITCODE -ne 0) {
         Write-ErrorCustom "克隆仓库失败"
         exit 1
+    }
+
+    # 恢复data目录
+    if ($dataBackupPath -and (Test-Path $dataBackupPath)) {
+        Copy-Item $dataBackupPath (Join-Path $ProjectDir "data") -Recurse -Force
+        Remove-Item $dataBackupPath -Force -Recurse
+        Write-Info "已恢复data目录"
     }
 
     Write-Success "仓库克隆成功"
