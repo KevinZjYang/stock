@@ -133,7 +133,7 @@ def check_for_updates():
         repo_name = repo_info.get('name', 'stock')  # 实际仓库名
 
         # 检查本地版本信息（如果存在）
-        local_version_file = os.path.join(os.path.dirname(BASE_DIR), 'VERSION')
+        local_version_file = os.path.join(BASE_DIR, 'VERSION')
         current_version = "unknown"
         if os.path.exists(local_version_file):
             with open(local_version_file, 'r', encoding='utf-8') as f:
