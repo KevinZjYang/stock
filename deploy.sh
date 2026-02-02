@@ -262,7 +262,20 @@ prepare_source_code() {
     else
         # 如果目标目录不存在，先创建目录，再移动解压目录内容
         mkdir -p "$PROJECT_DIR"
-        mv "$EXTRACTED_DIR"/* "$PROJECT_DIR"/
+
+        # 检查源目录内容并移动
+        for item in "$EXTRACTED_DIR"/*; do
+            if [[ -e "$item" ]]; then
+                mv "$item" "$PROJECT_DIR"/
+            fi
+        done
+
+        # 同时处理隐藏文件（如 .env.example, .gitignore 等）
+        for item in "$EXTRACTED_DIR"/.*; do
+            if [[ -e "$item" && "$(basename "$item")" != "." && "$(basename "$item")" != ".." ]]; then
+                mv "$item" "$PROJECT_DIR"/
+            fi
+        done
     fi
 
     # 恢复data目录内容 - 只恢复数据库文件
