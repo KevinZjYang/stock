@@ -194,7 +194,15 @@ prepare_source_code() {
     mkdir -p "$TEMP_DIR"
 
     # 构造下载URL（GitHub ZIP下载链接）
-    DOWNLOAD_URL=$(echo "$REPO_URL" | sed 's/github.com/api.github.com\/repos/g')"/zipball/main"
+    # 使用releases/latest/download方式，更可靠
+    if [[ "$REPO_URL" =~ ^https?://github\.com/([^/]+)/([^/]+)(\.git)?$ ]]; then
+        USER_NAME="${BASH_REMATCH[1]}"
+        REPO_NAME="${BASH_REMATCH[2]}"
+        DOWNLOAD_URL="https://github.com/$USER_NAME/$REPO_NAME/archive/refs/heads/main.zip"
+    else
+        # 如果URL格式不符合预期，使用原始方式
+        DOWNLOAD_URL=$(echo "$REPO_URL" | sed 's/github.com/api.github.com\/repos/g')"/zipball/main"
+    fi
 
     # 下载ZIP文件
     ZIP_PATH="$TEMP_DIR/latest_version.zip"
