@@ -151,7 +151,7 @@ except ImportError as e:
 
 # ==================== 更新功能路由 ====================
 try:
-    from modules.models import check_for_updates, perform_update, restart_application
+    from modules.models import check_for_updates, perform_update, restart_application, perform_safe_update
 
     @app.route('/api/update/check', methods=['GET'])
     def api_check_update():
@@ -162,7 +162,7 @@ try:
     @app.route('/api/update/perform', methods=['POST'])
     def api_perform_update():
         """执行更新"""
-        result = perform_update()
+        result = perform_safe_update()  # 使用安全更新函数
         return jsonify(result)
 
     @app.route('/api/update/restart', methods=['POST'])

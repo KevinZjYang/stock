@@ -124,28 +124,21 @@ function Prepare-SourceCode {
                 Copy-Item $_.FullName -Destination $ProjectDir -Recurse -Force
             }
 
-            # 恢复data目录内容
+            # 恢复data目录内容 - 只恢复数据库文件
             if ($dataBackupPath -and (Test-Path $dataBackupPath)) {
                 $newDataPath = Join-Path $ProjectDir "data"
                 # 确保新的data目录存在
                 if (!(Test-Path $newDataPath)) {
                     New-Item -ItemType Directory -Path $newDataPath -Force | Out-Null
                 }
-                # 将备份的data目录内容复制到新的data目录中
-                Get-ChildItem -Path $dataBackupPath | ForEach-Object {
-                    $destinationPath = Join-Path $newDataPath $_.Name
-                    if (Test-Path $destinationPath) {
-                        # 如果目标位置已存在同名项，则跳过或合并（对于目录）
-                        if ($_.PSIsContainer) {
-                            # 如果是目录，递归复制内容
-                            Copy-Item $_.FullName $destinationPath -Recurse -Force
-                        }
-                        # 如果是文件，默认的Copy-Item会覆盖
-                    } else {
-                        # 如果目标位置不存在，则直接复制
-                        Copy-Item $_.FullName $destinationPath -Recurse -Force
-                    }
+
+                # 只恢复数据库文件，避免覆盖新版本的其他文件
+                $dbBackupPath = Join-Path $dataBackupPath "stock_fund.db"
+                if (Test-Path $dbBackupPath) {
+                    Copy-Item $dbBackupPath (Join-Path $newDataPath "stock_fund.db") -Force
+                    Write-Info "已恢复数据库文件"
                 }
+
                 # 删除备份的data目录
                 Remove-Item $dataBackupPath -Force -Recurse
                 Write-Info "已恢复data目录内容"
@@ -160,19 +153,31 @@ function Prepare-SourceCode {
         return
     }
 
-    Write-Info "正在从 $RepoUrl 克隆仓库到临时目录..."
+    # 从远程下载ZIP包而非使用Git
+    Write-Info "正在从 $RepoUrl 下载最新版本..."
 
-    # 创建临时目录用于克隆
+    # 创建临时目录用于下载
     $tempDir = Join-Path $env:TEMP "stock_temp_$(Get-Date -Format 'yyyyMMdd_HHmmss')"
     New-Item -ItemType Directory -Path $tempDir -Force | Out-Null
 
     try {
-        # 克隆到临时目录
-        $cloneResult = git clone -b $Branch $RepoUrl $tempDir
-        if ($LASTEXITCODE -ne 0) {
-            Write-ErrorCustom "克隆仓库失败"
-            Remove-Item $tempDir -Recurse -Force
-            exit 1
+        # 构造下载URL（GitHub ZIP下载链接）
+        $downloadUrl = $RepoUrl.Replace("github.com", "api.github.com/repos") + "/zipball/main"
+
+        # 下载ZIP文件
+        $zipPath = Join-Path $tempDir "latest_version.zip"
+        Invoke-WebRequest -Uri $downloadUrl -OutFile $zipPath -UseBasicParsing
+
+        # 解压ZIP文件
+        Add-Type -AssemblyName System.IO.Compression.FileSystem
+        [System.IO.Compression.ZipFile]::ExtractToDirectory($zipPath, $tempDir)
+
+        # 找到解压后的目录（GitHub ZIP通常包含一个带仓库名的根目录）
+        $extractedDir = Get-ChildItem -Path $tempDir | Where-Object { $_.PSIsContainer } | Select-Object -First 1
+
+        if ($null -eq $extractedDir) {
+            Write-ErrorCustom "未能找到解压后的项目目录"
+            return
         }
 
         # 如果目标目录存在，备份它（除了data目录）
@@ -191,10 +196,10 @@ function Prepare-SourceCode {
             Write-Success "已备份到 $backupName （data目录除外）"
         }
 
-        # 将临时目录的内容移动到目标目录
+        # 将解压的目录内容移动到目标目录
         if (Test-Path $ProjectDir) {
-            # 如果目标目录已存在（此时只包含data目录），将临时目录的内容复制进去
-            Get-ChildItem -Path $tempDir | ForEach-Object {
+            # 如果目标目录已存在（此时只包含data目录），将解压目录的内容复制进去
+            Get-ChildItem -Path $extractedDir.FullName | ForEach-Object {
                 $destinationPath = Join-Path $ProjectDir $_.Name
                 if ($_.Name -ne "data") {  # 避免与已存在的data目录冲突
                     if (Test-Path $destinationPath) {
@@ -209,38 +214,35 @@ function Prepare-SourceCode {
                 }
             }
         } else {
-            # 如果目标目录不存在，直接重命名临时目录
-            Move-Item $tempDir $ProjectDir -Force
+            # 如果目标目录不存在，重命名解压目录
+            Move-Item $extractedDir.FullName $ProjectDir -Force
         }
 
-        # 恢复data目录内容
+        # 恢复data目录内容 - 只恢复数据库文件
         if ($dataBackupPath -and (Test-Path $dataBackupPath)) {
             $newDataPath = Join-Path $ProjectDir "data"
             # 确保新的data目录存在
             if (!(Test-Path $newDataPath)) {
                 New-Item -ItemType Directory -Path $newDataPath -Force | Out-Null
             }
-            # 将备份的data目录内容复制到新的data目录中
-            Get-ChildItem -Path $dataBackupPath | ForEach-Object {
-                $destinationPath = Join-Path $newDataPath $_.Name
-                if (Test-Path $destinationPath) {
-                    # 如果目标位置已存在同名项，则跳过或合并（对于目录）
-                    if ($_.PSIsContainer) {
-                        # 如果是目录，递归复制内容
-                        Copy-Item $_.FullName $destinationPath -Recurse -Force
-                    }
-                    # 如果是文件，默认的Copy-Item会覆盖
-                } else {
-                    # 如果目标位置不存在，则直接复制
-                    Copy-Item $_.FullName $destinationPath -Recurse -Force
-                }
+
+            # 只恢复数据库文件，避免覆盖新版本的其他文件
+            $dbBackupPath = Join-Path $dataBackupPath "stock_fund.db"
+            if (Test-Path $dbBackupPath) {
+                Copy-Item $dbBackupPath (Join-Path $newDataPath "stock_fund.db") -Force
+                Write-Info "已恢复数据库文件"
             }
+
             # 删除备份的data目录
             Remove-Item $dataBackupPath -Force -Recurse
             Write-Info "已恢复data目录内容"
         }
 
-        Write-Success "仓库克隆和覆盖成功"
+        Write-Success "代码下载和覆盖成功"
+    }
+    catch {
+        Write-ErrorCustom "下载或解压失败: $($_.Exception.Message)"
+        throw
     }
     finally {
         # 清理临时目录

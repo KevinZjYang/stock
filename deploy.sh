@@ -134,30 +134,19 @@ prepare_source_code() {
                 fi
             done
 
-            # 恢复data目录内容
+            # 恢复data目录内容 - 只恢复数据库文件
             if [[ -n "$DATA_BACKUP_PATH" && -d "$DATA_BACKUP_PATH" ]]; then
                 NEW_DATA_PATH="$PROJECT_DIR/data"
                 # 确保新的data目录存在
                 mkdir -p "$NEW_DATA_PATH"
-                # 将备份的data目录内容复制到新的data目录中
-                for item in "$DATA_BACKUP_PATH"/*; do
-                    if [[ -n "$item" ]]; then
-                        item_name=$(basename "$item")
-                        destination_path="$NEW_DATA_PATH/$item_name"
-                        if [[ -e "$destination_path" ]]; then
-                            # 如果目标位置已存在同名项，则递归复制（合并目录内容）
-                            if [[ -d "$item" && -d "$destination_path" ]]; then
-                                cp -r "$item"/* "$destination_path"/ 2>/dev/null || true
-                            else
-                                # 如果是文件，则覆盖
-                                cp -r "$item" "$destination_path"
-                            fi
-                        else
-                            # 如果目标位置不存在，则直接复制
-                            cp -r "$item" "$destination_path"
-                        fi
-                    fi
-                done
+
+                # 只恢复数据库文件，避免覆盖新版本的其他文件
+                DB_BACKUP_PATH="$DATA_BACKUP_PATH/stock_fund.db"
+                if [[ -f "$DB_BACKUP_PATH" ]]; then
+                    cp "$DB_BACKUP_PATH" "$NEW_DATA_PATH/stock_fund.db"
+                    print_info "已恢复数据库文件"
+                fi
+
                 # 删除备份的data目录
                 rm -rf "$DATA_BACKUP_PATH"
                 print_info "已恢复data目录内容"
@@ -172,7 +161,7 @@ prepare_source_code() {
         return
     fi
 
-    print_info "正在从 $REPO_URL 克隆仓库到 $PROJECT_DIR..."
+    print_info "正在从 $REPO_URL 下载最新版本..."
 
     if [[ -d "$PROJECT_DIR" ]]; then
         print_warning "目标目录 $PROJECT_DIR 已存在，正在备份（保留data目录）..."
@@ -198,25 +187,49 @@ prepare_source_code() {
         print_success "已备份到 $backup_name （data目录除外）"
     fi
 
-    print_info "正在从 $REPO_URL 克隆仓库到临时目录..."
+    print_info "正在从 $REPO_URL 下载最新版本..."
 
-    # 创建临时目录用于克隆
+    # 创建临时目录用于下载
     TEMP_DIR="/tmp/stock_temp_$(date +%Y%m%d_%H%M%S)"
     mkdir -p "$TEMP_DIR"
 
-    # 克隆到临时目录
-    if git clone -b "$BRANCH" "$REPO_URL" "$TEMP_DIR"; then
-        print_success "仓库克隆到临时目录成功"
+    # 构造下载URL（GitHub ZIP下载链接）
+    DOWNLOAD_URL=$(echo "$REPO_URL" | sed 's/github.com/api.github.com\/repos/g')"/zipball/main"
+
+    # 下载ZIP文件
+    ZIP_PATH="$TEMP_DIR/latest_version.zip"
+    if command -v curl &> /dev/null; then
+        curl -L -o "$ZIP_PATH" "$DOWNLOAD_URL"
+    elif command -v wget &> /dev/null; then
+        wget -O "$ZIP_PATH" "$DOWNLOAD_URL"
     else
-        print_error "克隆仓库失败"
+        print_error "curl 或 wget 未安装，无法下载更新"
         rm -rf "$TEMP_DIR"
         exit 1
     fi
 
-    # 将临时目录的内容移动到目标目录
+    if [[ $? -ne 0 ]]; then
+        print_error "下载失败"
+        rm -rf "$TEMP_DIR"
+        exit 1
+    fi
+
+    # 解压ZIP文件
+    unzip -q "$ZIP_PATH" -d "$TEMP_DIR"
+
+    # 找到解压后的目录（GitHub ZIP通常包含一个带仓库名的根目录）
+    EXTRACTED_DIR=$(find "$TEMP_DIR" -mindepth 1 -maxdepth 1 -type d | head -n 1)
+
+    if [[ -z "$EXTRACTED_DIR" ]]; then
+        print_error "未能找到解压后的项目目录"
+        rm -rf "$TEMP_DIR"
+        exit 1
+    fi
+
+    # 将解压的目录内容移动到目标目录
     if [[ -d "$PROJECT_DIR" ]]; then
-        # 如果目标目录已存在（此时只包含data目录），将临时目录的内容复制进去
-        for item in "$TEMP_DIR"/*; do
+        # 如果目标目录已存在（此时只包含data目录），将解压目录的内容复制进去
+        for item in "$EXTRACTED_DIR"/*; do
             if [[ -n "$item" ]]; then
                 item_name=$(basename "$item")
                 destination_path="$PROJECT_DIR/$item_name"
@@ -236,45 +249,32 @@ prepare_source_code() {
             fi
         done
     else
-        # 如果目标目录不存在，直接移动临时目录
-        mv "$TEMP_DIR" "$PROJECT_DIR"
+        # 如果目标目录不存在，直接移动解压目录内容
+        mv "$EXTRACTED_DIR"/* "$PROJECT_DIR"/
     fi
 
-    # 恢复data目录内容
+    # 恢复data目录内容 - 只恢复数据库文件
     if [[ -n "$DATA_BACKUP_PATH" && -d "$DATA_BACKUP_PATH" ]]; then
         NEW_DATA_PATH="$PROJECT_DIR/data"
         # 确保新的data目录存在
         mkdir -p "$NEW_DATA_PATH"
-        # 将备份的data目录内容复制到新的data目录中
-        for item in "$DATA_BACKUP_PATH"/*; do
-            if [[ -n "$item" ]]; then
-                item_name=$(basename "$item")
-                destination_path="$NEW_DATA_PATH/$item_name"
-                if [[ -e "$destination_path" ]]; then
-                    # 如果目标位置已存在同名项，则递归复制（合并目录内容）
-                    if [[ -d "$item" && -d "$destination_path" ]]; then
-                        cp -r "$item"/* "$destination_path"/ 2>/dev/null || true
-                    else
-                        # 如果是文件，则覆盖
-                        cp -r "$item" "$destination_path"
-                    fi
-                else
-                    # 如果目标位置不存在，则直接复制
-                    cp -r "$item" "$destination_path"
-                fi
-            fi
-        done
+
+        # 只恢复数据库文件，避免覆盖新版本的其他文件
+        DB_BACKUP_PATH="$DATA_BACKUP_PATH/stock_fund.db"
+        if [[ -f "$DB_BACKUP_PATH" ]]; then
+            cp "$DB_BACKUP_PATH" "$NEW_DATA_PATH/stock_fund.db"
+            print_info "已恢复数据库文件"
+        fi
+
         # 删除备份的data目录
         rm -rf "$DATA_BACKUP_PATH"
         print_info "已恢复data目录内容"
     fi
 
     # 清理临时目录
-    if [[ -d "$TEMP_DIR" ]]; then
-        rm -rf "$TEMP_DIR"
-    fi
+    rm -rf "$TEMP_DIR"
 
-    print_success "仓库克隆和覆盖成功"
+    print_success "代码下载和覆盖成功"
 }
 
 # 准备部署目录
