@@ -69,6 +69,12 @@
                                     <span class="status-indicator" id="statusIndicator"></span>
                                     <span id="statusText">等待检查...</span>
                                 </div>
+                                <div class="mt-2">
+                                    <small class="text-muted">当前版本: <span id="currentVersion">-</span></small>
+                                </div>
+                                <div class="mt-1">
+                                    <small class="text-muted">远程版本: <span id="remoteVersion">-</span></small>
+                                </div>
                             </div>
                         </div>
                     </div>
@@ -82,7 +88,7 @@
                                     执行更新
                                 </button>
                                 <div class="mt-3">
-                                    <span class="badge bg-secondary" id="updateCount">0 个更新</span>
+                                    <span class="badge bg-secondary" id="updateCount">无更新</span>
                                 </div>
                             </div>
                         </div>
@@ -179,33 +185,36 @@
         async function checkForUpdate() {
             checkSpinner.classList.remove('d-none');
             checkUpdateBtn.disabled = true;
-            
+
             try {
                 addLogEntry('info', '正在检查更新...');
                 const response = await fetch('/api/update/check');
                 const data = await response.json();
-                
+
+                // 更新版本信息显示
+                document.getElementById('currentVersion').textContent = data.current_version || '未知';
+                document.getElementById('remoteVersion').textContent = data.remote_version || '未知';
+
                 if (data.has_update) {
                     hasUpdate = true;
-                    updateCount = data.update_count;
                     statusIndicator.className = 'status-indicator status-active';
-                    statusText.textContent = `发现 ${updateCount} 个更新`;
+                    statusText.textContent = data.message || '发现新版本';
                     statusText.className = 'text-success';
                     updateCountEl.className = 'badge bg-success';
-                    updateCountEl.textContent = `${updateCount} 个更新`;
+                    updateCountEl.textContent = '有更新';
                     performUpdateBtn.disabled = false;
-                    addLogEntry('success', `发现 ${updateCount} 个更新`);
+                    addLogEntry('success', data.message || '发现新版本');
                 } else {
                     hasUpdate = false;
                     statusIndicator.className = 'status-indicator';
-                    statusText.textContent = '已是最新版本';
+                    statusText.textContent = data.message || '已是最新版本';
                     statusText.className = 'text-muted';
                     updateCountEl.className = 'badge bg-secondary';
-                    updateCountEl.textContent = '0 个更新';
+                    updateCountEl.textContent = '无更新';
                     performUpdateBtn.disabled = true;
-                    addLogEntry('info', '当前已是最新版本');
+                    addLogEntry('info', data.message || '当前已是最新版本');
                 }
-                
+
                 if (data.error) {
                     addLogEntry('error', `检查更新时出错: ${data.error}`);
                 }
@@ -233,7 +242,7 @@
             updateSpinner.classList.remove('d-none');
             performUpdateBtn.disabled = true;
             checkUpdateBtn.disabled = true;
-            
+
             try {
                 addLogEntry('info', '开始执行更新...');
                 const response = await fetch('/api/update/perform', {
@@ -243,15 +252,15 @@
                     }
                 });
                 const data = await response.json();
-                
+
                 if (data.success) {
-                    addLogEntry('success', data.message);
+                    addLogEntry('success', data.message || '更新成功');
                     restartAppBtn.disabled = false;
-                    
+
                     // 显示成功模态框
                     successModal.show();
                 } else {
-                    addLogEntry('error', `更新失败: ${data.error}`);
+                    addLogEntry('error', `更新失败: ${data.error || data.message}`);
                     performUpdateBtn.disabled = false;
                     checkUpdateBtn.disabled = false;
                 }
@@ -273,7 +282,7 @@
             restartSpinner.classList.remove('d-none');
             restartAppBtn.disabled = true;
             restartNotice.classList.remove('d-none');
-            
+
             try {
                 addLogEntry('info', '正在重启应用...');
                 const response = await fetch('/api/update/restart', {
@@ -283,9 +292,9 @@
                     }
                 });
                 const data = await response.json();
-                
-                addLogEntry('success', data.message);
-                
+
+                addLogEntry('success', data.message || '重启指令已发送');
+
                 // 显示重启通知并延迟刷新页面
                 setTimeout(() => {
                     location.reload();
@@ -310,8 +319,8 @@
         // 页面加载时自动检查更新
         window.addEventListener('load', () => {
             addLogEntry('info', '页面已加载，准备检查更新...');
-            // 可以选择在页面加载时自动检查更新
-            // checkForUpdate();
+            // 在页面加载时自动检查更新
+            checkForUpdate();
         });
     </script>
 </body>

@@ -151,7 +151,7 @@ except ImportError as e:
 
 # ==================== 更新功能路由 ====================
 try:
-    from modules.models import check_for_updates, perform_update, restart_application, perform_safe_update
+    from modules.update_system import check_for_updates, perform_update, restart_application, perform_safe_update
 
     @app.route('/api/update/check', methods=['GET'])
     def api_check_update():
