@@ -53,18 +53,18 @@ def backup_database():
 def get_setting(key, default=None):
     """获取设置值 - 从数据库中获取"""
     import sqlite3
-    
+
     conn = sqlite3.connect(DATABASE_PATH)
     cursor = conn.cursor()
     cursor.execute('SELECT value FROM settings WHERE key = ?', (key,))
     row = cursor.fetchone()
     conn.close()
-    
+
     if row:
         try:
-            return json.loads(row['value'])
+            return json.loads(row[0])  # row是元组，使用索引访问
         except:
-            return row['value']
+            return row[0]  # row是元组，使用索引访问
     return default
 
 
