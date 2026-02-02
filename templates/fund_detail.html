@@ -639,12 +639,28 @@
                     });
                     const result = await response.json();
                     if (response.ok) {
+                        // 从关注列表中移除基金
                         fundWatchlist = result.watchlist;
-                        updateTable();
+
+                        // 从DOM中删除对应的行
+                        const row = document.getElementById(`row-${code}`);
+                        if (row) {
+                            row.remove();
+                        }
+
                         showToast(`成功删除 ${code}`, 'success');
-                        manualRefresh();
+                        // 不需要调用 updateTable() 和 manualRefresh()，因为它们可能会导致不必要的重绘
+                        // 删除操作后，页面上不应该再显示该基金
                     } else {
-                        showToast(result.error, 'error');
+                        // 即使后端返回错误（如基金不在关注列表中），也要从DOM中删除对应的行
+                        // 这样可以确保UI与期望的状态一致
+                        const row = document.getElementById(`row-${code}`);
+                        if (row) {
+                            row.remove();
+                        }
+
+                        // 显示错误信息，但同时更新UI
+                        showToast(result.error || `基金 ${code} 删除失败`, 'error');
                     }
                 } catch (error) {
                     console.error('删除基金失败:', error);
