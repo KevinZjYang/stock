@@ -162,14 +162,17 @@ function Prepare-SourceCode {
 
     try {
         # 构造下载URL（GitHub ZIP下载链接）
-        # 使用更可靠的archive URL
+        # 使用镜像地址以提高在中国大陆的访问速度
         if ($RepoUrl -match "^https?://github\.com/([^/]+)/([^/]+)(\.git)?$") {
             $userName = $matches[1]
             $repoName = $matches[2]
-            $downloadUrl = "https://github.com/$userName/$repoName/archive/refs/heads/main.zip"
+            # 使用镜像地址
+            $downloadUrl = "https://gh.yiun.cyou/https://github.com/$userName/$repoName/archive/refs/heads/main.zip"
         } else {
             # 如果URL格式不符合预期，使用原始方式
             $downloadUrl = $RepoUrl.Replace("github.com", "api.github.com/repos") + "/zipball/main"
+            # 同样使用镜像地址
+            $downloadUrl = "https://gh.yiun.cyou/$downloadUrl"
         }
 
         # 下载ZIP文件

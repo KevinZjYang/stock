@@ -14,6 +14,7 @@
 - 使用HTTP下载ZIP包替代Git克隆
 - 支持从GitHub直接下载最新版本
 - 使用更可靠的archive URL (`/archive/refs/heads/main.zip`) 替代API端点
+- 支持镜像地址（如 `https://gh.yiun.cyou`）以提高网络访问稳定性
 - 适用于Docker部署环境
 
 ### 3. 智能文件覆盖
@@ -93,8 +94,13 @@
 1. **新版脚本已改进下载方式**：
    - 我们的部署脚本现在使用更可靠的archive URL (`/archive/refs/heads/main.zip`)
    - 这种方式比API端点更稳定，减少了SSL连接问题
+   - 支持镜像地址（如 `https://gh.yiun.cyou`）以提高网络访问稳定性
 
-2. **使用不同的下载方式**：
+2. **使用镜像地址**：
+   - 如果直接访问GitHub有问题，可以使用镜像地址
+   - 例如：`wget https://gh.yiun.cyou/https://github.com/KevinZjYang/stock/archive/refs/heads/main.zip`
+
+3. **使用不同的下载方式**：
    ```bash
    # 手动下载ZIP文件
    wget https://github.com/KevinZjYang/stock/archive/refs/heads/main.zip
@@ -102,11 +108,11 @@
    # 然后手动复制文件
    ```
 
-3. **检查网络连接**：
+4. **检查网络连接**：
    - 确认网络连接稳定
    - 检查防火墙或代理设置
    - 尝试使用不同的网络环境
 
-4. **重试机制**：
+5. **重试机制**：
    - 网络问题通常是临时的，稍后重试可能成功
    - 可以多次尝试运行部署脚本

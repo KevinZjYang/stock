@@ -194,14 +194,17 @@ prepare_source_code() {
     mkdir -p "$TEMP_DIR"
 
     # 构造下载URL（GitHub ZIP下载链接）
-    # 使用releases/latest/download方式，更可靠
+    # 使用镜像地址以提高在中国大陆的访问速度
     if [[ "$REPO_URL" =~ ^https?://github\.com/([^/]+)/([^/]+)(\.git)?$ ]]; then
         USER_NAME="${BASH_REMATCH[1]}"
         REPO_NAME="${BASH_REMATCH[2]}"
-        DOWNLOAD_URL="https://github.com/$USER_NAME/$REPO_NAME/archive/refs/heads/main.zip"
+        # 使用镜像地址
+        DOWNLOAD_URL="https://gh.yiun.cyou/https://github.com/$USER_NAME/$REPO_NAME/archive/refs/heads/main.zip"
     else
         # 如果URL格式不符合预期，使用原始方式
         DOWNLOAD_URL=$(echo "$REPO_URL" | sed 's/github.com/api.github.com\/repos/g')"/zipball/main"
+        # 同样使用镜像地址
+        DOWNLOAD_URL="https://gh.yiun.cyou/$DOWNLOAD_URL"
     fi
 
     # 下载ZIP文件
