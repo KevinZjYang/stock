@@ -681,9 +681,25 @@ def calculate_fund_summary(transactions):
     total_cost = sum(h['cost'] for h in holdings.values())
     total_cost = abs(total_cost)
 
-    # 注意：market_value需要通过实时API获取，这里暂时设为0
-    # 在实际应用中，可能需要调用基金API获取当前净值来计算市值
+    # 计算持仓市值：获取持有基金的实时净值并计算总市值
     market_value = 0
+    if holdings:
+        # 获取所有持有基金的代码
+        holding_codes = list(holdings.keys())
+        if holding_codes:
+            # 获取基金的实时净值
+            fund_prices = fetch_fund_price_batch_sync(holding_codes)
+            if fund_prices:
+                # 根据每只基金的持有份额和当前净值计算市值
+                for fund_data in fund_prices:
+                    code = fund_data.get('code')
+                    if code in holdings:
+                        # 使用估算净值(expectWorth)或单位净值(netWorth)，优先使用估算净值
+                        current_net_worth = fund_data.get('expectWorth') or fund_data.get('netWorth')
+                        if current_net_worth:
+                            holding_shares = holdings[code]['shares']
+                            fund_market_value = holding_shares * current_net_worth
+                            market_value += fund_market_value
 
     return {
         "total_shares": round(total_shares, 2),
