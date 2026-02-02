@@ -260,7 +260,8 @@ prepare_source_code() {
             fi
         done
     else
-        # 如果目标目录不存在，直接移动解压目录内容
+        # 如果目标目录不存在，先创建目录，再移动解压目录内容
+        mkdir -p "$PROJECT_DIR"
         mv "$EXTRACTED_DIR"/* "$PROJECT_DIR"/
     fi
 

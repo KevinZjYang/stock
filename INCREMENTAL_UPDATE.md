@@ -15,6 +15,7 @@
 - 支持从GitHub直接下载最新版本
 - 使用更可靠的archive URL (`/archive/refs/heads/main.zip`) 替代API端点
 - 支持镜像地址（如 `https://gh.yiun.cyou`）以提高网络访问稳定性
+- 自动创建目标目录，确保部署顺利进行
 - 适用于Docker部署环境
 
 ### 3. 智能文件覆盖
