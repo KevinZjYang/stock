@@ -225,42 +225,51 @@ function Prepare-SourceCode {
                 }
             }
         } else {
-            # 如果目标目录不存在，重命名解压目录
-            Move-Item $extractedDir.FullName $ProjectDir -Force
-        }
+            # 如果目标目录不存在，先创建目录，再移动解压目录内容
+            New-Item -ItemType Directory -Path $ProjectDir -Force | Out-Null
 
-        # 恢复data目录内容 - 只恢复数据库文件
-        if ($dataBackupPath -and (Test-Path $dataBackupPath)) {
-            $newDataPath = Join-Path $ProjectDir "data"
-            # 确保新的data目录存在
-            if (!(Test-Path $newDataPath)) {
-                New-Item -ItemType Directory -Path $newDataPath -Force | Out-Null
+            # 移动解压目录中的所有内容到目标目录
+            Get-ChildItem -Path $extractedDir.FullName | ForEach-Object {
+                $destinationPath = Join-Path $ProjectDir $_.Name
+                Move-Item $_.FullName $destinationPath -Force
             }
 
-            # 只恢复数据库文件，避免覆盖新版本的其他文件
-            $dbBackupPath = Join-Path $dataBackupPath "stock_fund.db"
-            if (Test-Path $dbBackupPath) {
-                Copy-Item $dbBackupPath (Join-Path $newDataPath "stock_fund.db") -Force
-                Write-Info "已恢复数据库文件"
-            }
-
-            # 删除备份的data目录
-            Remove-Item $dataBackupPath -Force -Recurse
-            Write-Info "已恢复data目录内容"
-        }
-
-        Write-Success "代码下载和覆盖成功"
-    }
-    catch {
-        Write-ErrorCustom "下载或解压失败: $($_.Exception.Message)"
-        throw
-    }
-    finally {
-        # 清理临时目录
-        if (Test-Path $tempDir) {
-            Remove-Item $tempDir -Recurse -Force
+            # 同时处理隐藏文件（如 .env.example, .gitignore 等）- PowerShell中通常不需要特别处理隐藏文件
         }
     }
+
+    # 恢复data目录内容 - 只恢复数据库文件
+    if ($dataBackupPath -and (Test-Path $dataBackupPath)) {
+        $newDataPath = Join-Path $ProjectDir "data"
+        # 确保新的data目录存在
+        if (!(Test-Path $newDataPath)) {
+            New-Item -ItemType Directory -Path $newDataPath -Force | Out-Null
+        }
+
+        # 只恢复数据库文件，避免覆盖新版本的其他文件
+        $dbBackupPath = Join-Path $dataBackupPath "stock_fund.db"
+        if (Test-Path $dbBackupPath) {
+            Copy-Item $dbBackupPath (Join-Path $newDataPath "stock_fund.db") -Force
+            Write-Info "已恢复数据库文件"
+        }
+
+        # 删除备份的data目录
+        Remove-Item $dataBackupPath -Force -Recurse
+        Write-Info "已恢复data目录内容"
+    }
+
+    Write-Success "代码下载和覆盖成功"
+}
+catch {
+    Write-ErrorCustom "下载或解压失败: $($_.Exception.Message)"
+    throw
+}
+finally {
+    # 清理临时目录
+    if (Test-Path $tempDir) {
+        Remove-Item $tempDir -Recurse -Force
+    }
+}
 }
 
 # 准备部署目录
