@@ -660,16 +660,28 @@ def restart_application():
     """重启应用程序"""
     import subprocess
     import os
+    import threading
+    import time
     try:
         app_logger.info("尝试重启应用程序...")
 
         # 如果是在Docker容器中运行，尝试重启服务
         if os.path.exists('/.dockerenv'):  # 检查是否在Docker容器中
             # 在Docker中，通常需要重启整个容器
-            app_logger.info("检测到在Docker容器中运行，发送重启信号...")
-            import signal
-            os.kill(os.getpid(), signal.SIGTERM)  # 发送终止信号，让Docker重启容器
-            return {"success": True, "message": "已发送重启信号"}
+            app_logger.info("检测到在Docker容器中运行，准备重启...")
+
+            # 先返回响应给前端，然后延迟终止进程
+            def delayed_kill():
+                time.sleep(1)  # 给前端一点时间接收响应
+                import signal
+                os.kill(os.getpid(), signal.SIGTERM)  # 发送终止信号，让Docker重启容器
+
+            # 在单独的线程中执行延迟终止
+            kill_thread = threading.Thread(target=delayed_kill)
+            kill_thread.daemon = True
+            kill_thread.start()
+
+            return {"success": True, "message": "正在重启应用程序..."}
         else:
             # 不是在Docker中，尝试使用systemctl或其他方式重启
             # 这里可以根据实际部署方式进行调整
