@@ -291,6 +291,15 @@
 
     <!-- 表格区域 -->
     <div class="table-container">
+        <!-- 进度条容器 -->
+        <div id="refreshProgressContainer" style="display: none; margin-bottom: 15px; padding: 10px; background: #f8f9fa; border-radius: 4px; border: 1px solid #ddd;">
+            <div style="display: flex; align-items: center;">
+                <div id="progressBar" style="flex: 1; height: 20px; background: #e9ecef; border-radius: 10px; overflow: hidden;">
+                    <div id="progressFill" style="height: 100%; width: 0%; background: #3498db; transition: width 0.3s;"></div>
+                </div>
+                <span id="progressText" style="margin-left: 15px; font-weight: bold; color: #3498db; min-width: 120px;">准备刷新...</span>
+            </div>
+        </div>
         <table>
             <thead>
                 <tr>
@@ -737,6 +746,19 @@
 
         async function fetchPrices(isManual = false) {
             try {
+                // 显示进度条
+                const progressContainer = document.getElementById('refreshProgressContainer');
+                const progressFill = document.getElementById('progressFill');
+                const progressText = document.getElementById('progressText');
+
+                progressContainer.style.display = 'block';
+                progressFill.style.width = '10%';
+                progressText.textContent = '准备刷新...';
+
+                // 获取基金价格
+                progressFill.style.width = '30%';
+                progressText.textContent = '正在获取数据...';
+
                 const response = await fetch('/api/fund/prices');
 
                 if (!response.ok) {
@@ -745,6 +767,10 @@
                 }
 
                 const prices = await response.json();
+
+                progressFill.style.width = '60%';
+                progressText.textContent = '更新表格数据...';
+
                 prices.forEach(priceData => {
                     updateRow(priceData);
 
@@ -776,14 +802,28 @@
                     }
                 });
 
+                progressFill.style.width = '90%';
+                progressText.textContent = '完成...';
+
                 lastRefreshTime = new Date();
                 const statusText = isManual ? '手动刷新成功' : '刷新成功';
                 updateFooterStatus(`${statusText} | 上次刷新: ${lastRefreshTime.toLocaleTimeString()}`, 'refreshing');
+
+                // 完成后隐藏进度条
+                setTimeout(() => {
+                    progressContainer.style.display = 'none';
+                    progressFill.style.width = '0%';
+                    progressText.textContent = '准备刷新...';
+                }, 500);
 
             } catch (error) {
                 console.error('获取基金价格失败:', error);
                 updateFooterStatus(`获取基金价格失败: ${error.message}`, 'error');
                 showToast('获取基金价格失败', 'error');
+
+                // 出现错误时也要隐藏进度条
+                const progressContainer = document.getElementById('refreshProgressContainer');
+                progressContainer.style.display = 'none';
             }
         }
 
