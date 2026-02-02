@@ -271,14 +271,24 @@ def perform_update():
                     for item in os.listdir(current_dir):
                         item_path = os.path.join(current_dir, item)
 
-                        # 跳过data目录和备份目录
-                        if item in ['data', os.path.basename(backup_dir)]:
+                        # 跳过data目录、logs目录和备份目录（在Docker环境中logs可能被挂载为卷）
+                        if item in ['data', 'logs', os.path.basename(backup_dir)]:
                             continue
 
                         if os.path.isdir(item_path):
-                            shutil.rmtree(item_path)
+                            try:
+                                shutil.rmtree(item_path)
+                            except OSError as e:
+                                app_logger.warning(f"无法删除目录 {item_path}: {e}")
+                                # 如果无法删除目录，跳过它
+                                continue
                         else:
-                            os.remove(item_path)
+                            try:
+                                os.remove(item_path)
+                            except OSError as e:
+                                app_logger.warning(f"无法删除文件 {item_path}: {e}")
+                                # 如果无法删除文件，跳过它
+                                continue
 
                     # 将新版本文件复制到当前目录
                     for item in os.listdir(extracted_root):
@@ -429,14 +439,24 @@ def perform_safe_update():
                 for item in os.listdir(current_project_dir):
                     item_path = os.path.join(current_project_dir, item)
 
-                    # 跳过data目录和备份目录
-                    if item in ['data', os.path.basename(backup_dir)]:
+                    # 跳过data目录、logs目录和备份目录（在Docker环境中logs可能被挂载为卷）
+                    if item in ['data', 'logs', os.path.basename(backup_dir)]:
                         continue
 
                     if os.path.isdir(item_path):
-                        shutil.rmtree(item_path)
+                        try:
+                            shutil.rmtree(item_path)
+                        except OSError as e:
+                            app_logger.warning(f"无法删除目录 {item_path}: {e}")
+                            # 如果无法删除目录，跳过它
+                            continue
                     else:
-                        os.remove(item_path)
+                        try:
+                            os.remove(item_path)
+                        except OSError as e:
+                            app_logger.warning(f"无法删除文件 {item_path}: {e}")
+                            # 如果无法删除文件，跳过它
+                            continue
 
                 # 将新版本文件复制到当前目录
                 for item in os.listdir(extracted_root):
