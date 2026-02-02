@@ -282,6 +282,33 @@ def search_fund_route():
         app_logger.error(f"基金搜索错误: {query}, IP: {client_ip}, 错误: {e}")
         return jsonify({'error': f'搜索基金失败: {str(e)}'}), 500
 
+@fund_bp.route('/simple_detail', methods=['GET'])
+def get_fund_simple_detail():
+    """获取基金简单详情（仅基础数据，不包含历史净值走势）"""
+    code = request.args.get('code')
+    client_ip = request.remote_addr
+    app_logger.info(f"获取基金简单详情请求来自: {client_ip}, 基金代码: {code}")
+
+    if not code:
+        app_logger.warning(f"获取基金简单详情失败: 缺少基金代码, IP: {client_ip}")
+        return jsonify({'error': '缺少基金代码'}), 400
+
+    try:
+        # 使用fetch_fund_price_batch_sync函数获取基础数据
+        fund_data_list = fetch_fund_price_batch_sync([code])
+
+        if fund_data_list:
+            fund_detail = fund_data_list[0]
+            app_logger.info(f"成功获取基金简单详情: {code}, IP: {request.remote_addr}")
+            return jsonify(fund_detail)
+        else:
+            app_logger.warning(f"未找到基金简单详情: {code}, IP: {request.remote_addr}")
+            return jsonify({'error': '未找到该基金数据'}), 404
+
+    except Exception as e:
+        app_logger.error(f"获取基金简单详情错误: {code}, IP: {request.remote_addr}, 错误: {e}")
+        return jsonify({'error': f'获取基金数据失败: {str(e)}'}), 500
+
 @fund_bp.route('/detail', methods=['GET'])
 def get_fund_detail():
     code = request.args.get('code')
@@ -455,15 +482,19 @@ def get_fund_prices():
     current_time = time.time()
     if data_cache['funds'] and (current_time - data_cache['last_update'] < CACHE_EXPIRY):
         app_logger.info("获取基金价格: 使用缓存")
+        app_logger.info(f"缓存中的基金数量: {len(data_cache['funds'])}")
         response = make_response(jsonify(data_cache['funds']))
     else:
         watchlist = load_fund_watchlist()
+        app_logger.info(f"当前基金关注列表: {watchlist}")
         if not watchlist:
             app_logger.info("获取基金价格: 关注列表为空")
             response = make_response(jsonify([]))
         else:
-            app_logger.info(f"获取基金价格: 批量获取 {len(watchlist)} 个基金")
+            app_logger.info(f"获取基金价格: 批量获取 {len(watchlist)} 个基金, 代码列表: {watchlist}")
             fund_data_list = fetch_fund_price_batch_sync(watchlist)
+            app_logger.info(f"从API获取的基金数据数量: {len(fund_data_list)}")
+            app_logger.info(f"返回的基金数据代码: {[fund['code'] for fund in fund_data_list]}")
             data_cache['funds'] = fund_data_list
             data_cache['last_update'] = current_time
             response = make_response(jsonify(fund_data_list))

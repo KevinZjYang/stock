@@ -557,17 +557,21 @@
                 });
                 const result = await response.json();
                 if (response.ok) {
-                    fundWatchlist = result.watchlist;
-                    updateTable();
+                    // 更新前端的基金列表，添加新基金
+                    if (!fundWatchlist.includes(code)) {
+                        fundWatchlist.push(code);
+                    }
+                    // 只为新基金创建行，不重新创建所有行
+                    if (!document.getElementById(`row-${code}`)) {
+                        createRow(code);
+                    }
                     input.value = '';
                     input.dataset.code = ''; // 清除选中的代码
                     showToast(`成功添加 ${code}`, 'success');
 
-                    // 添加基金后立即获取该基金的数据
-                    fetchSingleFundData(code).then(() => {
-                        // 手动刷新整个列表
-                        manualRefresh();
-                    });
+                    // 添加基金后立即获取该基金的数据，然后更新表格
+                    await fetchSingleFundData(code);
+                    // 不需要刷新整个列表，因为已经单独更新了新添加的基金
                 } else {
                     showToast(result.error, 'error');
                 }
@@ -586,31 +590,33 @@
                     createRow(code);
                 }
 
-                // 获取基金数据
-                const response = await fetch(`/api/fund/prices`);
+                // 直接获取单个基金的数据，而不是获取全部基金数据
+                const response = await fetch(`/api/fund/simple_detail?code=${code}`);
                 if (!response.ok) {
                     throw new Error(`HTTP ${response.status}`);
                 }
 
-                const prices = await response.json();
-                const fundData = prices.find(fund => fund.code === code);
+                const fundData = await response.json();
 
-                if (fundData) {
-                    // 更新行数据
-                    updateRow(fundData);
-
-                    // 将数据缓存到基金详情缓存中
-                    if (!fundDetailsCache[code]) {
-                        fundDetailsCache[code] = { ...fundData };
-                    } else {
-                        Object.assign(fundDetailsCache[code], fundData);
-                    }
-                } else {
-                    // 如果API没有返回该基金的数据，可能需要稍等片刻再试
-                    console.log(`基金 ${code} 的数据暂时未获取到，可能需要等待API更新`);
+                if (fundData.error) {
+                    console.log(`基金 ${code} 的数据获取失败: ${fundData.error}`);
+                    return null;
                 }
+
+                // 更新行数据
+                updateRow(fundData);
+
+                // 将数据缓存到基金详情缓存中
+                if (!fundDetailsCache[code]) {
+                    fundDetailsCache[code] = { ...fundData };
+                } else {
+                    Object.assign(fundDetailsCache[code], fundData);
+                }
+
+                return fundData; // 返回基金数据
             } catch (error) {
                 console.error(`获取基金 ${code} 数据失败:`, error);
+                return null;
             }
         }
 
@@ -830,7 +836,10 @@
         function updateRow(priceData) {
             const code = priceData.code;
             const row = document.getElementById(`row-${code}`);
-            if (!row) return;
+            if (!row) {
+                // 如果行不存在，先创建它
+                createRow(code);
+            }
 
             const nameCell = document.getElementById(`name-${code}`);
             if (nameCell) {
@@ -846,14 +855,14 @@
 
             const netWorthCell = document.getElementById(`netWorth-${code}`);
             if (netWorthCell) {
-                const netWorth = priceData.netWorth !== null && priceData.netWorth !== undefined ? priceData.netWorth.toFixed(4) : '--';
+                const netWorth = priceData.netWorth !== null && priceData.netWorth !== undefined ? parseFloat(priceData.netWorth).toFixed(4) : '--';
                 const netWorthDate = priceData.netWorthDate || '';
                 netWorthCell.innerHTML = `${netWorth}<br><small style="font-size: 10px; color: #666;">${netWorthDate}</small>`;
             }
 
             const expectWorthCell = document.getElementById(`expectWorth-${code}`);
             if (expectWorthCell) {
-                const expectWorth = priceData.expectWorth !== null && priceData.expectWorth !== undefined ? priceData.expectWorth.toFixed(4) : '--';
+                const expectWorth = priceData.expectWorth !== null && priceData.expectWorth !== undefined ? parseFloat(priceData.expectWorth).toFixed(4) : '--';
                 const expectWorthDate = priceData.expectWorthDate || '';
                 expectWorthCell.innerHTML = `${expectWorth}<br><small style="font-size: 10px; color: #666;">${expectWorthDate}</small>`;
             }
@@ -861,8 +870,9 @@
             const dayGrowthCell = document.getElementById(`dayGrowth-${code}`);
             if (dayGrowthCell) {
                 if (priceData.dayGrowth !== null && priceData.dayGrowth !== undefined) {
-                    dayGrowthCell.textContent = priceData.dayGrowth.toFixed(2) + '%';
-                    dayGrowthCell.className = priceData.dayGrowth > 0 ? 'positive' : (priceData.dayGrowth < 0 ? 'negative' : 'neutral');
+                    const growth = parseFloat(priceData.dayGrowth);
+                    dayGrowthCell.textContent = growth.toFixed(2) + '%';
+                    dayGrowthCell.className = growth > 0 ? 'positive' : (growth < 0 ? 'negative' : 'neutral');
                 } else {
                     dayGrowthCell.textContent = '--';
                     dayGrowthCell.className = '';
@@ -872,8 +882,9 @@
             const lastWeekGrowthCell = document.getElementById(`lastWeekGrowth-${code}`);
             if (lastWeekGrowthCell) {
                 if (priceData.lastWeekGrowth !== null && priceData.lastWeekGrowth !== undefined) {
-                    lastWeekGrowthCell.textContent = priceData.lastWeekGrowth.toFixed(2) + '%';
-                    lastWeekGrowthCell.className = priceData.lastWeekGrowth > 0 ? 'positive' : (priceData.lastWeekGrowth < 0 ? 'negative' : 'neutral');
+                    const growth = parseFloat(priceData.lastWeekGrowth);
+                    lastWeekGrowthCell.textContent = growth.toFixed(2) + '%';
+                    lastWeekGrowthCell.className = growth > 0 ? 'positive' : (growth < 0 ? 'negative' : 'neutral');
                 } else {
                     lastWeekGrowthCell.textContent = '--';
                     lastWeekGrowthCell.className = '';
@@ -883,8 +894,9 @@
             const lastMonthGrowthCell = document.getElementById(`lastMonthGrowth-${code}`);
             if (lastMonthGrowthCell) {
                 if (priceData.lastMonthGrowth !== null && priceData.lastMonthGrowth !== undefined) {
-                    lastMonthGrowthCell.textContent = priceData.lastMonthGrowth.toFixed(2) + '%';
-                    lastMonthGrowthCell.className = priceData.lastMonthGrowth > 0 ? 'positive' : (priceData.lastMonthGrowth < 0 ? 'negative' : 'neutral');
+                    const growth = parseFloat(priceData.lastMonthGrowth);
+                    lastMonthGrowthCell.textContent = growth.toFixed(2) + '%';
+                    lastMonthGrowthCell.className = growth > 0 ? 'positive' : (growth < 0 ? 'negative' : 'neutral');
                 } else {
                     lastMonthGrowthCell.textContent = '--';
                     lastMonthGrowthCell.className = '';
@@ -894,8 +906,9 @@
             const lastYearGrowthCell = document.getElementById(`lastYearGrowth-${code}`);
             if (lastYearGrowthCell) {
                 if (priceData.lastYearGrowth !== null && priceData.lastYearGrowth !== undefined) {
-                    lastYearGrowthCell.textContent = priceData.lastYearGrowth.toFixed(2) + '%';
-                    lastYearGrowthCell.className = priceData.lastYearGrowth > 0 ? 'positive' : (priceData.lastYearGrowth < 0 ? 'negative' : 'neutral');
+                    const growth = parseFloat(priceData.lastYearGrowth);
+                    lastYearGrowthCell.textContent = growth.toFixed(2) + '%';
+                    lastYearGrowthCell.className = growth > 0 ? 'positive' : (growth < 0 ? 'negative' : 'neutral');
                 } else {
                     lastYearGrowthCell.textContent = '--';
                     lastYearGrowthCell.className = '';

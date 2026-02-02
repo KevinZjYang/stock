@@ -948,10 +948,10 @@ def fetch_fund_price_batch_sync(codes):
                 return float(value)
             except (ValueError, TypeError): return None
 
-        fund_data_list = []
+        # 创建一个字典来存储API返回的数据，以便快速查找
+        api_data_dict = {}
         for fund_data in data['data']:
             code = str(fund_data.get('code', ''))
-
             fund_info = {
                 'code': code,
                 'name': fund_data.get('name', '--'),
@@ -977,7 +977,41 @@ def fetch_fund_price_batch_sync(codes):
                 'netWorthDisplay': f"{to_float(fund_data.get('netWorth'))}<br><small>{fund_data.get('netWorthDate', '')}</small>" if fund_data.get('netWorth') else "--",
                 'expectWorthDisplay': f"{to_float(fund_data.get('expectWorth'))}<br><small>{fund_data.get('expectWorthDate', '')}</small>" if fund_data.get('expectWorth') else "--"
             }
-            fund_data_list.append(fund_info)
+            api_data_dict[code] = fund_info
+
+        # 确保返回的数据包含所有请求的基金代码，对于API未返回的基金，返回默认值
+        fund_data_list = []
+        for code in codes:
+            if code in api_data_dict:
+                fund_data_list.append(api_data_dict[code])
+            else:
+                # 如果API没有返回该基金的数据，返回一个默认结构
+                fund_info = {
+                    'code': code,
+                    'name': '--',
+                    'type': 'fund',
+                    'netWorth': None,
+                    'expectWorth': None,
+                    'totalWorth': None,
+                    'expectGrowth': None,
+                    'dayGrowth': None,
+                    'lastWeekGrowth': None,
+                    'lastMonthGrowth': None,
+                    'lastThreeMonthsGrowth': None,
+                    'lastSixMonthsGrowth': None,
+                    'lastYearGrowth': None,
+                    'buyMin': None,
+                    'buySourceRate': None,
+                    'buyRate': None,
+                    'manager': None,
+                    'fundScale': None,
+                    'netWorthDate': None,
+                    'expectWorthDate': None,
+                    'netWorthDisplay': '--',
+                    'expectWorthDisplay': '--'
+                }
+                fund_data_list.append(fund_info)
+
         return fund_data_list
 
     except requests.exceptions.Timeout:
