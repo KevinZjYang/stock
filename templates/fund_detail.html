@@ -590,8 +590,8 @@
                     createRow(code);
                 }
 
-                // 直接获取单个基金的数据，而不是获取全部基金数据
-                const response = await fetch(`/api/fund/simple_detail?code=${code}`);
+                // 获取包含走势图的完整基金数据
+                const response = await fetch(`/api/fund/detail?code=${code}&period=ALL`);
                 if (!response.ok) {
                     throw new Error(`HTTP ${response.status}`);
                 }

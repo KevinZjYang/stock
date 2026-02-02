@@ -368,14 +368,14 @@ def get_fund_detail():
             fund_detail_data = detail_response_data['data'][0]
 
             # 添加净值走势图数据
-            net_worth_data = fund_detail_data.get('netWorthData', [])
-            total_netWorth_data = fund_detail_data.get('totalNetWorthData', [])
+            netWorthData = fund_detail_data.get('netWorthData', [])
+            totalNetWorthData = fund_detail_data.get('totalNetWorthData', [])
 
-            app_logger.info(f"获取到净值数据条数: {len(net_worth_data)}, 累计净值数据条数: {len(total_net_worth_data)}")
+            app_logger.info(f"获取到净值数据条数: {len(netWorthData)}, 累计净值数据条数: {len(totalNetWorthData)}")
 
             # 将净值走势图数据添加到返回的数据中
-            fund_detail_data['netWorthData'] = net_worth_data
-            fund_detail_data['totalNetWorthData'] = total_net_worth_data
+            fund_detail_data['netWorthData'] = netWorthData
+            fund_detail_data['totalNetWorthData'] = totalNetWorthData
 
             # 如果是货币基金，也添加相关数据
             if 'millionCopiesIncomeData' in fund_detail_data:
