@@ -272,7 +272,7 @@ def perform_update():
                         item_path = os.path.join(current_dir, item)
 
                         # 跳过data目录、logs目录和备份目录（在Docker环境中logs可能被挂载为卷）
-                        if item in ['data', 'logs', os.path.basename(backup_dir)]:
+                        if item in ['data', 'logs', os.path.basename(backup_dir), 'templates']:
                             continue
 
                         if os.path.isdir(item_path):
@@ -296,7 +296,28 @@ def perform_update():
                         dst_path = os.path.join(current_dir, item)
 
                         if os.path.isdir(src_path):
-                            shutil.copytree(src_path, dst_path)
+                            # 对于特定的目录（如templates, data, logs），它们可能被挂载为Docker卷
+                            # 我们需要处理这些特殊情况，避免尝试替换挂载的目录
+                            if item in ['templates', 'data', 'logs']:
+                                # 只复制目录内容而不替换目录本身
+                                if not os.path.exists(dst_path):
+                                    os.makedirs(dst_path, exist_ok=True)
+
+                                for sub_item in os.listdir(src_path):
+                                    sub_src_path = os.path.join(src_path, sub_item)
+                                    sub_dst_path = os.path.join(dst_path, sub_item)
+
+                                    if os.path.isdir(sub_src_path):
+                                        if os.path.exists(sub_dst_path):
+                                            shutil.rmtree(sub_dst_path)
+                                        shutil.copytree(sub_src_path, sub_dst_path)
+                                    else:
+                                        shutil.copy2(sub_src_path, sub_dst_path)
+                            else:
+                                # 其他目录正常操作
+                                if os.path.exists(dst_path):
+                                    shutil.rmtree(dst_path)
+                                shutil.copytree(src_path, dst_path)
                         else:
                             shutil.copy2(src_path, dst_path)
 
@@ -439,8 +460,8 @@ def perform_safe_update():
                 for item in os.listdir(current_project_dir):
                     item_path = os.path.join(current_project_dir, item)
 
-                    # 跳过data目录、logs目录和备份目录（在Docker环境中logs可能被挂载为卷）
-                    if item in ['data', 'logs', os.path.basename(backup_dir)]:
+                    # 跳过data目录、logs目录、templates目录和备份目录（在Docker环境中这些可能被挂载为卷）
+                    if item in ['data', 'logs', os.path.basename(backup_dir), 'templates']:
                         continue
 
                     if os.path.isdir(item_path):
@@ -464,7 +485,28 @@ def perform_safe_update():
                     dst_path = os.path.join(current_project_dir, item)
 
                     if os.path.isdir(src_path):
-                        shutil.copytree(src_path, dst_path)
+                        # 对于特定的目录（如templates, data, logs），它们可能被挂载为Docker卷
+                        # 我们需要处理这些特殊情况，避免尝试替换挂载的目录
+                        if item in ['templates', 'data', 'logs']:
+                            # 只复制目录内容而不替换目录本身
+                            if not os.path.exists(dst_path):
+                                os.makedirs(dst_path, exist_ok=True)
+
+                            for sub_item in os.listdir(src_path):
+                                sub_src_path = os.path.join(src_path, sub_item)
+                                sub_dst_path = os.path.join(dst_path, sub_item)
+
+                                if os.path.isdir(sub_src_path):
+                                    if os.path.exists(sub_dst_path):
+                                        shutil.rmtree(sub_dst_path)
+                                    shutil.copytree(sub_src_path, sub_dst_path)
+                                else:
+                                    shutil.copy2(sub_src_path, sub_dst_path)
+                        else:
+                            # 其他目录正常操作
+                            if os.path.exists(dst_path):
+                                shutil.rmtree(dst_path)
+                            shutil.copytree(src_path, dst_path)
                     else:
                         shutil.copy2(src_path, dst_path)
 

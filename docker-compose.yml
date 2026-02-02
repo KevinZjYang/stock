@@ -10,10 +10,6 @@ services:
       - ./data:/app/data
       # 持久化日志目录
       - ./logs:/app/logs
-      # 挂载模板目录（如果需要外部修改）
-      - ./templates:/app/templates
-      # 挂载Excel数据文件（如果存在）
-      - ./basedata/code.xlsx:/app/basedata/code.xlsx:ro
     environment:
       - PYTHONUNBUFFERED=1
       - FLASK_ENV=production
