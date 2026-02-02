@@ -346,69 +346,56 @@ def get_fund_detail():
         app_logger.info(f"使用默认日期范围: startDate={start_date}, endDate={end_date}")
 
     try:
-        # 使用fetch_fund_price_batch_sync函数获取基础数据
-        fund_data_list = fetch_fund_price_batch_sync([code])
+        # 直接请求基金详情API获取完整的基金数据，包括净值走势图
+        # 根据API文档，使用正确的API端点
+        detail_api_url = 'https://api.autostock.cn/v1/fund/detail/list'
+        params = {'code': code, 'startDate': start_date, 'endDate': end_date}
+        headers = {
+            'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/91.0.4472.124 Safari/537.36'
+        }
 
-        if fund_data_list:
-            fund_detail = fund_data_list[0]
+        app_logger.info(f"请求基金详情数据，基金代码: {code}")
+        app_logger.info(f"请求URL: https://api.autostock.cn/v1/fund/detail/list 参数: {params}")
 
-            # 从基金详情API获取完整的基金数据，包括净值走势图
-            # 根据API文档，使用正确的API端点
-            detail_api_url = 'https://api.autostock.cn/v1/fund/detail/list'
-            params = {'code': code, 'startDate': start_date, 'endDate': end_date}
-            headers = {
-                'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/91.0.4472.124 Safari/537.36'
-            }
+        detail_response = requests.get('https://api.autostock.cn/v1/fund/detail/list', params=params, headers=headers, timeout=30)
+        detail_response.raise_for_status()
+        detail_response_data = detail_response.json()
 
-            app_logger.info(f"请求基金详情数据，基金代码: {code}")
-            app_logger.info(f"请求URL: https://api.autostock.cn/v1/fund/detail/list 参数: {params}")
+        app_logger.info(f"基金详情API响应: {detail_response_data.get('code', 'NO_CODE')}")
 
-            try:
-                detail_response = requests.get('https://api.autostock.cn/v1/fund/detail/list', params=params, headers=headers, timeout=30)
-                detail_response.raise_for_status()
-                detail_response_data = detail_response.json()
+        # 检查API响应是否成功 - 根据实际API响应格式调整
+        if detail_response_data.get('code') == 200 and detail_response_data.get('data'):
+            fund_detail_data = detail_response_data['data'][0]
 
-                app_logger.info(f"基金详情API响应: {detail_response_data.get('code', 'NO_CODE')}")
+            # 添加净值走势图数据
+            net_worth_data = fund_detail_data.get('netWorthData', [])
+            total_netWorth_data = fund_detail_data.get('totalNetWorthData', [])
 
-                # 检查API响应是否成功 - 根据实际API响应格式调整
-                if detail_response_data.get('code') == 200 and detail_response_data.get('data'):
-                    fund_detail_data = detail_response_data['data'][0]
+            app_logger.info(f"获取到净值数据条数: {len(net_worth_data)}, 累计净值数据条数: {len(total_net_worth_data)}")
 
-                    # 添加净值走势图数据
-                    net_worth_data = fund_detail_data.get('netWorthData', [])
-                    total_net_worth_data = fund_detail_data.get('totalNetWorthData', [])
+            # 将净值走势图数据添加到返回的数据中
+            fund_detail_data['netWorthData'] = net_worth_data
+            fund_detail_data['totalNetWorthData'] = total_net_worth_data
 
-                    app_logger.info(f"获取到净值数据条数: {len(net_worth_data)}, 累计净值数据条数: {len(total_net_worth_data)}")
-
-                    # 将净值走势图数据添加到返回的数据中
-                    fund_detail['netWorthData'] = net_worth_data
-                    fund_detail['totalNetWorthData'] = total_net_worth_data
-
-                    # 如果是货币基金，也添加相关数据
-                    if 'millionCopiesIncomeData' in fund_detail_data:
-                        fund_detail['millionCopiesIncomeData'] = fund_detail_data.get('millionCopiesIncomeData', [])
-                        fund_detail['sevenDaysYearIncomeData'] = fund_detail_data.get('sevenDaysYearIncomeData', [])
-                else:
-                    # 如果API调用失败，仍然返回基本数据
-                    app_logger.warning(f"获取基金详细数据失败: {code}, 但返回基本数据")
-                    app_logger.warning(f"API响应: {detail_response_data}")
-                    fund_detail['netWorthData'] = []
-                    fund_detail['totalNetWorthData'] = []
-            except requests.exceptions.RequestException as e:
-                app_logger.error(f"请求基金详情API失败: {e}")
-                fund_detail['netWorthData'] = []
-                fund_detail['totalNetWorthData'] = []
-            except ValueError as e:  # JSON解析错误
-                app_logger.error(f"解析基金详情API响应失败: {e}")
-                fund_detail['netWorthData'] = []
-                fund_detail['totalNetWorthData'] = []
+            # 如果是货币基金，也添加相关数据
+            if 'millionCopiesIncomeData' in fund_detail_data:
+                fund_detail_data['millionCopiesIncomeData'] = fund_detail_data.get('millionCopiesIncomeData', [])
+                fund_detail_data['sevenDaysYearIncomeData'] = fund_detail_data.get('sevenDaysYearIncomeData', [])
 
             app_logger.info(f"成功获取基金详情: {code}, IP: {request.remote_addr}")
-            return jsonify(fund_detail)
+            return jsonify(fund_detail_data)
         else:
-            app_logger.warning(f"未找到基金详情: {code}, IP: {request.remote_addr}")
-            return jsonify({'error': '未找到该基金数据'}), 404
+            # 如果API调用失败，返回错误
+            app_logger.warning(f"获取基金详细数据失败: {code}")
+            app_logger.warning(f"API响应: {detail_response_data}")
+            return jsonify({'error': '未找到该基金详细数据'}), 404
 
+    except requests.exceptions.RequestException as e:
+        app_logger.error(f"请求基金详情API失败: {e}")
+        return jsonify({'error': f'请求基金详情API失败: {str(e)}'}), 500
+    except ValueError as e:  # JSON解析错误
+        app_logger.error(f"解析基金详情API响应失败: {e}")
+        return jsonify({'error': f'解析基金详情API响应失败: {str(e)}'}), 500
     except Exception as e:
         app_logger.error(f"获取基金详情错误: {code}, IP: {request.remote_addr}, 错误: {e}")
         return jsonify({'error': f'获取基金数据失败: {str(e)}'}), 500
@@ -492,7 +479,118 @@ def get_fund_prices():
             response = make_response(jsonify([]))
         else:
             app_logger.info(f"获取基金价格: 批量获取 {len(watchlist)} 个基金, 代码列表: {watchlist}")
-            fund_data_list = fetch_fund_price_batch_sync(watchlist)
+            # 获取包含走势图的完整基金数据
+            fund_data_list = []
+            today = time.strftime('%Y-%m-%d')
+            for code in watchlist:
+                try:
+                    # 请求包含历史净值数据的详细信息
+                    params = {'code': code, 'startDate': today}
+                    headers = {'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36'}
+
+                    response = requests.get('https://api.autostock.cn/v1/fund/detail/list', params=params, headers=headers, timeout=20)
+                    response.raise_for_status()
+                    data = response.json()
+
+                    if data and 'data' in data and data['data']:
+                        fund_detail_data = data['data'][0]
+
+                        # 构造基金信息，确保包含基础字段
+                        fund_info = {
+                            'code': fund_detail_data.get('code', code),
+                            'name': fund_detail_data.get('name', '--'),
+                            'type': fund_detail_data.get('type', '--'),
+                            'netWorth': fund_detail_data.get('netWorth'),
+                            'expectWorth': fund_detail_data.get('expectWorth'),
+                            'totalWorth': fund_detail_data.get('totalWorth'),
+                            'expectGrowth': fund_detail_data.get('expectGrowth'),
+                            'dayGrowth': fund_detail_data.get('dayGrowth'),
+                            'lastWeekGrowth': fund_detail_data.get('lastWeekGrowth'),
+                            'lastMonthGrowth': fund_detail_data.get('lastMonthGrowth'),
+                            'lastThreeMonthsGrowth': fund_detail_data.get('lastThreeMonthsGrowth'),
+                            'lastSixMonthsGrowth': fund_detail_data.get('lastSixMonthsGrowth'),
+                            'lastYearGrowth': fund_detail_data.get('lastYearGrowth'),
+                            'buyMin': fund_detail_data.get('buyMin'),
+                            'buySourceRate': fund_detail_data.get('buySourceRate'),
+                            'buyRate': fund_detail_data.get('buyRate'),
+                            'manager': fund_detail_data.get('manager'),
+                            'fundScale': fund_detail_data.get('fundScale'),
+                            'netWorthDate': fund_detail_data.get('netWorthDate'),
+                            'expectWorthDate': fund_detail_data.get('expectWorthDate'),
+                            # 添加格式化的日期信息，便于前端显示
+                            'netWorthDisplay': f"{fund_detail_data.get('netWorth')}<br><small>{fund_detail_data.get('netWorthDate', '')}</small>" if fund_detail_data.get('netWorth') else "--",
+                            'expectWorthDisplay': f"{fund_detail_data.get('expectWorth')}<br><small>{fund_detail_data.get('expectWorthDate', '')}</small>" if fund_detail_data.get('expectWorth') else "--",
+                            # 添加走势图数据
+                            'netWorthData': fund_detail_data.get('netWorthData', []),
+                            'totalNetWorthData': fund_detail_data.get('totalNetWorthData', [])
+                        }
+
+                        # 如果是货币基金，也添加相关数据
+                        if 'millionCopiesIncomeData' in fund_detail_data:
+                            fund_info['millionCopiesIncomeData'] = fund_detail_data.get('millionCopiesIncomeData', [])
+                            fund_info['sevenDaysYearIncomeData'] = fund_detail_data.get('sevenDaysYearIncomeData', [])
+
+                        fund_data_list.append(fund_info)
+                    else:
+                        # 如果API没有返回数据，使用默认结构
+                        fund_info = {
+                            'code': code,
+                            'name': '--',
+                            'type': 'fund',
+                            'netWorth': None,
+                            'expectWorth': None,
+                            'totalWorth': None,
+                            'expectGrowth': None,
+                            'dayGrowth': None,
+                            'lastWeekGrowth': None,
+                            'lastMonthGrowth': None,
+                            'lastThreeMonthsGrowth': None,
+                            'lastSixMonthsGrowth': None,
+                            'lastYearGrowth': None,
+                            'buyMin': None,
+                            'buySourceRate': None,
+                            'buyRate': None,
+                            'manager': None,
+                            'fundScale': None,
+                            'netWorthDate': None,
+                            'expectWorthDate': None,
+                            'netWorthDisplay': '--',
+                            'expectWorthDisplay': '--',
+                            'netWorthData': [],
+                            'totalNetWorthData': []
+                        }
+                        fund_data_list.append(fund_info)
+                except Exception as e:
+                    app_logger.error(f"获取基金 {code} 详细数据失败: {e}")
+                    # 出错时返回默认结构
+                    fund_info = {
+                        'code': code,
+                        'name': '--',
+                        'type': 'fund',
+                        'netWorth': None,
+                        'expectWorth': None,
+                        'totalWorth': None,
+                        'expectGrowth': None,
+                        'dayGrowth': None,
+                        'lastWeekGrowth': None,
+                        'lastMonthGrowth': None,
+                        'lastThreeMonthsGrowth': None,
+                        'lastSixMonthsGrowth': None,
+                        'lastYearGrowth': None,
+                        'buyMin': None,
+                        'buySourceRate': None,
+                        'buyRate': None,
+                        'manager': None,
+                        'fundScale': None,
+                        'netWorthDate': None,
+                        'expectWorthDate': None,
+                        'netWorthDisplay': '--',
+                        'expectWorthDisplay': '--',
+                        'netWorthData': [],
+                        'totalNetWorthData': []
+                    }
+                    fund_data_list.append(fund_info)
+
             app_logger.info(f"从API获取的基金数据数量: {len(fund_data_list)}")
             app_logger.info(f"返回的基金数据代码: {[fund['code'] for fund in fund_data_list]}")
             data_cache['funds'] = fund_data_list
