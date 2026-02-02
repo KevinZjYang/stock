@@ -828,7 +828,20 @@
                 const id = event.target.id;
                 const code = id.substring('name-'.length);
                 if (code) {
-                    showFundDetail(code);
+                    // 添加视觉反馈，让用户知道点击已生效
+                    const originalText = event.target.textContent;
+                    const originalColor = event.target.style.color;
+                    event.target.textContent = '加载中...';
+                    event.target.style.color = '#f39c12'; // 橙色表示加载中
+
+                    // 调用显示基金详情的函数，传入回调函数用于恢复原始文本
+                    showFundDetail(code, function() {
+                        // 数据加载完成后恢复原始文本和颜色
+                        if (document.getElementById(id)) {
+                            document.getElementById(id).textContent = originalText;
+                            document.getElementById(id).style.color = originalColor;
+                        }
+                    });
                 }
             }
         }
@@ -1057,7 +1070,7 @@
         }
 
         // 显示基金详情和净值走势图
-        async function showFundDetail(code) {
+        async function showFundDetail(code, callback) {
             console.log('开始显示基金详情，基金代码:', code);
 
             // 首先检查缓存中是否有数据
@@ -1174,6 +1187,11 @@
                     // 绘制净值走势图
                     drawNetWorthChart(fundData, currentPeriod);
                 }
+
+                // 调用回调函数，如果提供了的话
+                if (callback && typeof callback === 'function') {
+                    callback();
+                }
             } else {
                 console.log('缓存中不存在该基金的数据，发起请求');
 
@@ -1234,6 +1252,11 @@
                 } catch (error) {
                     console.error('获取基金详情失败:', error);
                     showToast(`获取基金详情失败: ${error.message}`, 'error');
+                }
+
+                // 调用回调函数，如果提供了的话
+                if (callback && typeof callback === 'function') {
+                    callback();
                 }
             }
         }
@@ -1377,7 +1400,7 @@
                 try {
                     window.currentChart.destroy();
                 } catch (e) {
-                    console.warn('销毁图表实例时出错:', e);
+                    console.warn('销毁���表实��时出错:', e);
                 }
             }
 
