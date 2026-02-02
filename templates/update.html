@@ -214,6 +214,8 @@
                     performUpdateBtn.disabled = true;
                     addLogEntry('info', data.message || '当前已是最新版本');
                 }
+                // 无论是否有更新，都启用重启按钮，允许手动重启
+                restartAppBtn.disabled = false;
 
                 if (data.error) {
                     addLogEntry('error', `检查更新时出错: ${data.error}`);
@@ -255,6 +257,7 @@
 
                 if (data.success) {
                     addLogEntry('success', data.message || '更新成功');
+                    // 更新成功后，启用重启按钮
                     restartAppBtn.disabled = false;
 
                     // 显示成功模态框
