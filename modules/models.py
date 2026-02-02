@@ -36,6 +36,7 @@ STOCK_API_URL = 'https://stock.xueqiu.com/v5/stock/realtime/quotec.json'
 FUND_BATCH_API_URL = 'https://api.autostock.cn/v1/fund/detail/list'
 
 # 确保数据目录存在
+os.makedirs(os.path.dirname(DATABASE_PATH), exist_ok=True)
 os.makedirs(os.path.dirname(STOCK_DATA_FILE), exist_ok=True)
 os.makedirs(LOG_DIR, exist_ok=True)
 
