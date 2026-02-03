@@ -43,7 +43,7 @@ from modules.models import (
 # 从 models 模块导入基金交易相关函数
 from modules.models import (
     load_fund_transactions, add_fund_transaction, update_fund_transaction,
-    delete_fund_transaction, clear_all_fund_transactions, calculate_fund_summary,
+    delete_fund_transaction, clear_all_fund_transactions,
     import_excel_transactions, export_excel_transactions
 )
 

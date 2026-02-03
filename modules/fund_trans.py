@@ -2,16 +2,280 @@
 from flask import Blueprint, request, jsonify, make_response, render_template, send_file
 import sys
 import os
+import requests
+import time
 # 添加上级目录到路径，以便导入 models.py
 sys.path.append(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
 from modules.models import (
-    load_fund_transactions, calculate_fund_summary,
+    load_fund_transactions,
     import_excel_transactions, export_excel_transactions, app_logger,
     add_fund_transaction, update_fund_transaction, delete_fund_transaction, get_db_connection
 )
 
 fund_trans_bp = Blueprint('fund_trans', __name__)
+
+def calculate_fund_summary(transactions):
+    """计算基金交易汇总数据 - 改进版本，正确处理成本计算"""
+    if not transactions:
+        return {
+            "total_shares": 0, "total_cost": 0, "realized_profit": 0,
+            "dividend_total": 0, "buy_count": 0, "sell_count": 0,
+            "dividend_count": 0, "trade_count": 0, "total_fee": 0,
+            "market_value": 0  # 添加市值字段
+        }
+
+    holdings = {}
+    realized_profit = 0
+    dividend_total = 0
+    buy_count = 0
+    sell_count = 0
+    dividend_count = 0
+    total_fee = 0
+
+    for t in transactions:
+        code = t.get('code')
+        # 确保基金代码是6位格式，不足的前面补0
+        formatted_code = str(code).zfill(6)
+        t_type = t.get('type')
+
+        shares = float(t.get('shares', 0)) if t.get('shares') is not None else 0
+        amount = float(t.get('actual_amount', 0)) if t.get('actual_amount') is not None else 0
+        fee = float(t.get('fee', 0)) if t.get('fee') is not None else 0
+
+        total_fee += fee
+
+        if t_type == '买入':
+            buy_count += 1
+            if formatted_code not in holdings:
+                holdings[formatted_code] = {'shares': 0, 'cost': 0}
+
+            holdings[formatted_code]['shares'] += shares
+            # 买入时增加成本，成本为实际交易金额（手续费已包含在内）
+            holdings[formatted_code]['cost'] += abs(amount)
+
+        elif t_type == '卖出':
+            sell_count += 1
+            if formatted_code in holdings and holdings[formatted_code]['shares'] > 0:
+                # 计算平均成本单价
+                avg_cost_per_share = holdings[formatted_code]['cost'] / holdings[formatted_code]['shares']
+
+                # 计算卖出份额对应的成本
+                sell_cost = shares * avg_cost_per_share
+
+                # 计算卖出收益（扣除手续费）
+                sell_income = abs(amount) - fee
+
+                # 计算已实现盈亏
+                realized_profit += (sell_income - sell_cost)
+
+                # 减少持仓份额和对应成本
+                holdings[formatted_code]['shares'] -= shares
+                holdings[formatted_code]['cost'] -= sell_cost
+
+                if holdings[formatted_code]['shares'] <= 0.0001:
+                    del holdings[formatted_code]
+
+        elif t_type == '分红':
+            dividend_count += 1
+            dividend_total += abs(amount)
+            # 分红属于已实现收益，增加到已实现盈亏中，但不影响持仓成本
+            realized_profit += abs(amount)
+
+    total_shares = sum(h['shares'] for h in holdings.values())
+    # 持仓成本总额 = 所有持仓基金的成本之和
+    total_cost = sum(h['cost'] for h in holdings.values())
+    total_cost = abs(total_cost)
+
+    # 计算持仓市值：获取持有基金的实时净值并计算总市值
+    market_value = 0
+    if holdings:
+        # 获取所有持有基金的代码（已经是6位格式）
+        holding_codes = list(holdings.keys())
+        if holding_codes:
+            # 获取基金的实时净值（holding_codes已经是6位格式）
+            fund_prices = fetch_fund_price_batch_sync(holding_codes)
+            if fund_prices:
+                # 根据每只基金的持有份额和当前净值计算市值
+                for fund_data in fund_prices:
+                    code = fund_data.get('code')
+                    # 由于holdings中的键已经是6位格式，直接匹配即可
+                    if code in holdings:
+                        # 使用估算净值(expectWorth)或单位净值(netWorth)，优先使用估算净值
+                        current_net_worth = fund_data.get('expectWorth') or fund_data.get('netWorth')
+                        if current_net_worth:
+                            holding_shares = holdings[code]['shares']
+                            fund_market_value = holding_shares * current_net_worth
+                            market_value += fund_market_value
+                        else:
+                            app_logger.warning(f"未能获取基金 {code} 的净值数据，跳过市值计算")
+                    else:
+                        app_logger.warning(f"返回的基金代码 {code} 在持仓中找不到匹配项，持仓代码: {holding_codes}")
+            else:
+                app_logger.warning(f"未能获取基金净值数据，持有基金数量: {len(holding_codes)}, 基金代码: {holding_codes}")
+    else:
+        app_logger.info("当前无持仓，市值为0")
+
+    return {
+        "total_shares": round(total_shares, 2),
+        "total_cost": round(total_cost, 2),
+        "realized_profit": round(realized_profit, 2),
+        "dividend_total": round(dividend_total, 2),
+        "total_fee": round(total_fee, 2),
+        "market_value": round(market_value, 2),  # 添加市值
+        "buy_count": buy_count,
+        "sell_count": sell_count,
+        "dividend_count": dividend_count,
+        "trade_count": len(transactions)
+    }
+
+def fetch_fund_price_batch_sync(codes):
+    """同步获取多个基金的价格数据 - 从models.py复制过来"""
+    try:
+        if not isinstance(codes, list):
+            codes = [codes]
+
+        # 确保基金代码是6位格式，不足的前面补0
+        formatted_codes = []
+        for code in codes:
+            formatted_code = str(code).zfill(6)  # 补齐到6位
+            formatted_codes.append(formatted_code)
+
+        code_str = ','.join(formatted_codes)
+        today = time.strftime('%Y-%m-%d')
+        params = {'code': code_str, 'startDate': today}
+        headers = {'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36'}
+
+        app_logger.info(f"开始批量获取基金数据: 数量={len(codes)}, 代码={code_str}")
+
+        start_time = time.time()
+        response = requests.get('https://api.autostock.cn/v1/fund/detail/list', params=params, headers=headers, timeout=20)
+        response_time = time.time() - start_time
+
+        app_logger.info(f"基金API响应时间: {response_time:.2f}s, 状态码: {response.status_code}, 请求代码: {code_str}")
+
+        response.raise_for_status()
+
+        data = response.json()
+
+        app_logger.info(f"基金API返回的原始数据结构: {list(data.keys()) if isinstance(data, dict) else type(data)}")
+
+        if not data:
+            app_logger.error(f"基金API返回数据为空: {code_str}")
+            return []
+
+        # 检查数据结构，可能API返回的格式与预期不同
+        if 'data' not in data:
+            app_logger.error(f"基金API返回数据中没有 'data' 字段，实际返回: {data}")
+
+            # 检查是否是错误响应
+            if data.get('code') == 500 or data.get('code') == 400:
+                app_logger.error(f"基金API返回错误: {data.get('message', '未知错误')}, traceId: {data.get('traceId')}")
+                return []  # 返回空列表，表示无法获取数据
+
+            # 尝试其他可能的字段名
+            possible_data_fields = ['result', 'list', 'items', 'funds', 'records', 'Data', 'RESULT', 'LIST']
+            for field in possible_data_fields:
+                if field in data:
+                    app_logger.info(f"使用替代字段 '{field}' 作为数据源")
+                    data['data'] = data[field]
+                    break
+
+        # 再次检查，如果还是没有data字段，尝试其他可能的数据格式
+        if 'data' not in data:
+            # 检查是否直接返回了数组
+            if isinstance(data, list):
+                app_logger.info("API直接返回了数组格式，将其作为数据源")
+                data = {'data': data}
+            elif isinstance(data, dict) and len(data) == 1:
+                # 如果只有一个键值对，可能那个值就是数据
+                first_key = next(iter(data))
+                if isinstance(data[first_key], list):
+                    app_logger.info(f"使用唯一键 '{first_key}' 的值作为数据源")
+                    data = {'data': data[first_key]}
+            else:
+                app_logger.error(f"基金API返回数据格式错误，缺少数据字段: {code_str}, 返回: {data}")
+                return []
+
+        def to_float(value):
+            if value is None: return None
+            try:
+                if isinstance(value, str): value = value.replace('%', '').strip()
+                return float(value)
+            except (ValueError, TypeError): return None
+
+        # 创建一个字典来存储API返回的数据，以便快速查找
+        api_data_dict = {}
+        for fund_data in data['data']:
+            code = str(fund_data.get('code', ''))
+            fund_info = {
+                'code': code,
+                'name': fund_data.get('name', '--'),
+                'type': fund_data.get('type', '--'),
+                'netWorth': to_float(fund_data.get('netWorth')),
+                'expectWorth': to_float(fund_data.get('expectWorth')),
+                'totalWorth': to_float(fund_data.get('totalWorth')),
+                'expectGrowth': to_float(fund_data.get('expectGrowth')),
+                'dayGrowth': to_float(fund_data.get('dayGrowth')),
+                'lastWeekGrowth': to_float(fund_data.get('lastWeekGrowth')),
+                'lastMonthGrowth': to_float(fund_data.get('lastMonthGrowth')),
+                'lastThreeMonthsGrowth': to_float(fund_data.get('lastThreeMonthsGrowth')),
+                'lastSixMonthsGrowth': to_float(fund_data.get('lastSixMonthsGrowth')),
+                'lastYearGrowth': to_float(fund_data.get('lastYearGrowth')),
+                'buyMin': fund_data.get('buyMin'),
+                'buySourceRate': fund_data.get('buySourceRate'),
+                'buyRate': fund_data.get('buyRate'),
+                'manager': fund_data.get('manager'),
+                'fundScale': fund_data.get('fundScale'),
+                'netWorthDate': fund_data.get('netWorthDate'),
+                'expectWorthDate': fund_data.get('expectWorthDate'),
+                # 添加格式化的日期信息，便于前端显示
+                'netWorthDisplay': f"{to_float(fund_data.get('netWorth'))}<br><small>{fund_data.get('netWorthDate', '')}</small>" if fund_data.get('netWorth') else "--",
+                'expectWorthDisplay': f"{to_float(fund_data.get('expectWorth'))}<br><small>{fund_data.get('expectWorthDate', '')}</small>" if fund_data.get('expectWorth') else "--"
+            }
+            api_data_dict[code] = fund_info
+
+        # 确保返回的数据包含所有请求的基金代码，对于API未返回的基金，返回默认值
+        fund_data_list = []
+        for code in codes:
+            if code in api_data_dict:
+                fund_data_list.append(api_data_dict[code])
+            else:
+                # 如果API没有返回该基金的数据，返回一个默认结构
+                fund_info = {
+                    'code': code,
+                    'name': '--',
+                    'type': 'fund',
+                    'netWorth': None,
+                    'expectWorth': None,
+                    'totalWorth': None,
+                    'expectGrowth': None,
+                    'dayGrowth': None,
+                    'lastWeekGrowth': None,
+                    'lastMonthGrowth': None,
+                    'lastThreeMonthsGrowth': None,
+                    'lastSixMonthsGrowth': None,
+                    'lastYearGrowth': None,
+                    'buyMin': None,
+                    'buySourceRate': None,
+                    'buyRate': None,
+                    'manager': None,
+                    'fundScale': None,
+                    'netWorthDate': None,
+                    'expectWorthDate': None,
+                    'netWorthDisplay': '--',
+                    'expectWorthDisplay': '--'
+                }
+                fund_data_list.append(fund_info)
+
+        return fund_data_list
+
+    except requests.exceptions.Timeout:
+        app_logger.error(f"批量获取基金错误: 请求超时 (20秒)")
+        return []
+    except Exception as e:
+        app_logger.error(f"批量获取基金错误: {e}")
+        return []
 
 @fund_trans_bp.route('/detail_page')
 def fund_trans_detail_page():
@@ -125,7 +389,7 @@ def manage_transactions():
 def get_summary():
     transactions = load_fund_transactions()
     summary = calculate_fund_summary(transactions)
-    
+
     response = make_response(jsonify(summary))
     response.headers['Cache-Control'] = 'no-cache, no-store, must-revalidate'
     response.headers['Pragma'] = 'no-cache'

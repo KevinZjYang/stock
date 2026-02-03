@@ -624,96 +624,6 @@ def save_fund_transactions(transactions):
         app_logger.error(f"保存基金交易记录失败: 错误={e}")
         return False
 
-def calculate_fund_summary(transactions):
-    """计算基金交易汇总数据"""
-    if not transactions:
-        return {
-            "total_shares": 0, "total_cost": 0, "realized_profit": 0,
-            "dividend_total": 0, "buy_count": 0, "sell_count": 0,
-            "dividend_count": 0, "trade_count": 0, "total_fee": 0,
-            "market_value": 0  # 添加市值字段
-        }
-
-    holdings = {}
-    realized_profit = 0
-    dividend_total = 0
-    buy_count = 0
-    sell_count = 0
-    dividend_count = 0
-    total_fee = 0
-
-    for t in transactions:
-        code = t.get('code')
-        t_type = t.get('type')
-
-        shares = float(t.get('shares', 0)) if t.get('shares') is not None else 0
-        amount = float(t.get('actual_amount', 0)) if t.get('actual_amount') is not None else 0
-        fee = float(t.get('fee', 0)) if t.get('fee') is not None else 0
-
-        total_fee += fee
-
-        if t_type == '买入':
-            buy_count += 1
-            if code not in holdings:
-                holdings[code] = {'shares': 0, 'cost': 0}
-
-            holdings[code]['shares'] += shares
-            holdings[code]['cost'] += (abs(amount) + fee)
-
-        elif t_type == '卖出':
-            sell_count += 1
-            if code in holdings and holdings[code]['shares'] > 0:
-                avg_cost_per_share = holdings[code]['cost'] / holdings[code]['shares']
-                sell_cost = shares * avg_cost_per_share
-                sell_income = abs(amount) - fee
-                realized_profit += (sell_income - sell_cost)
-                holdings[code]['shares'] -= shares
-                holdings[code]['cost'] -= sell_cost
-
-                if holdings[code]['shares'] <= 0.0001:
-                    del holdings[code]
-
-        elif t_type == '分红':
-            dividend_count += 1
-            dividend_total += abs(amount)
-            realized_profit += abs(amount)
-
-    total_shares = sum(h['shares'] for h in holdings.values())
-    total_cost = sum(h['cost'] for h in holdings.values())
-    total_cost = abs(total_cost)
-
-    # 计算持仓市值：获取持有基金的实时净值并计算总市值
-    market_value = 0
-    if holdings:
-        # 获取所有持有基金的代码
-        holding_codes = list(holdings.keys())
-        if holding_codes:
-            # 获取基金的实时净值
-            fund_prices = fetch_fund_price_batch_sync(holding_codes)
-            if fund_prices:
-                # 根据每只基金的持有份额和当前净值计算市值
-                for fund_data in fund_prices:
-                    code = fund_data.get('code')
-                    if code in holdings:
-                        # 使用估算净值(expectWorth)或单位净值(netWorth)，优先使用估算净值
-                        current_net_worth = fund_data.get('expectWorth') or fund_data.get('netWorth')
-                        if current_net_worth:
-                            holding_shares = holdings[code]['shares']
-                            fund_market_value = holding_shares * current_net_worth
-                            market_value += fund_market_value
-
-    return {
-        "total_shares": round(total_shares, 2),
-        "total_cost": round(total_cost, 2),
-        "realized_profit": round(realized_profit, 2),
-        "dividend_total": round(dividend_total, 2),
-        "total_fee": round(total_fee, 2),
-        "market_value": round(market_value, 2),  # 添加市值
-        "buy_count": buy_count,
-        "sell_count": sell_count,
-        "dividend_count": dividend_count,
-        "trade_count": len(transactions)
-    }
 
 def import_excel_transactions(file_stream):
     try:
@@ -813,12 +723,47 @@ def export_excel_transactions():
         existing_columns = [col for col in columns if col in df.columns]
         df = df[existing_columns]
 
+        # 获取所有基金的最新净值
+        unique_codes = df['code'].unique()
+        net_worth_dict = {}
+
+        if len(unique_codes) > 0:
+            # 确保基金代码是6位格式，不足的前面补0
+            formatted_codes = [str(code).zfill(6) for code in unique_codes]
+            # 获取基金的最新净值
+            fund_prices = fetch_fund_price_batch_sync(formatted_codes)
+            for fund_data in fund_prices:
+                code = fund_data.get('code')
+                # 优先使用估算净值，否则使用单位净值
+                net_worth = fund_data.get('expectWorth') or fund_data.get('netWorth')
+                if net_worth is not None:
+                    net_worth_dict[code] = net_worth
+
+        # 添加最新净值列，处理可能的代码格式不匹配问题
+        def get_net_worth(code):
+            # 尝试原始代码
+            if code in net_worth_dict:
+                return net_worth_dict[code]
+            # 尝试6位格式的代码
+            formatted_code = str(code).zfill(6)
+            if formatted_code in net_worth_dict:
+                return net_worth_dict[formatted_code]
+            return '--'
+
+        df['latest_net_worth'] = df['code'].apply(get_net_worth)
+
         column_map = {
             'date': '日期', 'name': '名称', 'code': '代码', 'actual_amount': '实际金额',
             'trade_amount': '交易金额', 'shares': '份额', 'price': '价格', 'fee': '手续费',
-            'type': '类型', 'note': '备注'
+            'type': '类型', 'note': '备注', 'latest_net_worth': '最新净值'
         }
         df.rename(columns=column_map, inplace=True)
+
+        # 重新排列列顺序，将最新净值放在代码后面
+        cols = df.columns.tolist()
+        # 将'最新净值'列移到'代码'列之后
+        cols.insert(cols.index('代码') + 1, cols.pop(cols.index('最新净值')))
+        df = df[cols]
 
         timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
         filename = f"fund_transactions_{timestamp}.xlsx"
@@ -913,6 +858,7 @@ def remove_fund_from_watchlist(code):
         conn.close()
         app_logger.warning(f"基金不在关注列表中: {code}")
         return False
+
 
 def fetch_fund_price_batch_sync(codes):
     """同步获取多个基金的价格数据"""
