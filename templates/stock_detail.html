@@ -216,22 +216,106 @@
         .footer-status.error { color: #e74c3c; }
         .footer-status.paused { color: #f39c12; }
 
-        /* 模态框 */
-        .modal { display: none; position: fixed; top: 0; left: 0; width: 100%; height: 100%; background: rgba(0,0,0,0.5); z-index: 1000; justify-content: center; align-items: center; }
-        .modal-content { background: white; padding: 20px; border-radius: 8px; width: 90%; max-width: 400px; }
-        .modal-content.large { max-width: 800px; width: 90%; max-height: 80vh; overflow: hidden; }
-        .modal-content h3 { margin-top: 0; }
-        .modal-content input { width: 100%; padding: 8px; margin: 10px 0; border: 1px solid #ccc; border-radius: 4px; }
-        .modal-buttons { display: flex; justify-content: flex-end; gap: 10px; margin-top: 15px; }
+        /* 模态框基础样式 */
+        .modal {
+            display: none;
+            position: fixed;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            background: rgba(0,0,0,0.5);
+            z-index: 1000;
+            justify-content: center;
+            align-items: center;
+            /* 确保模态框居中显示 */
+            align-items: flex-start;
+            padding-top: 60px;
+        }
+
+        /* 模态框内容容器 */
+        .modal-content {
+            background: white;
+            padding: 20px;
+            border-radius: 8px;
+            width: 90%;
+            max-width: 400px;
+            box-shadow: 0 4px 20px rgba(0,0,0,0.3);
+            /* 确保内容不会超出屏幕 */
+            max-height: calc(100vh - 100px);
+            overflow-y: auto;
+        }
+
+        /* 监控模态框特殊样式 */
+        #monitorModal .modal-content {
+            max-width: 500px;
+            width: 90%;
+            max-height: 90vh;
+            overflow: auto;
+        }
+
+        .modal-content.large {
+            max-width: 800px;
+            width: 90%;
+            max-height: 80vh;
+            overflow: auto;
+        }
+
+        .modal-content h3 {
+            margin-top: 0;
+            margin-bottom: 15px;
+            color: #2c3e50;
+        }
+
+        .modal-content input {
+            width: 100%;
+            padding: 8px 10px;
+            margin: 10px 0;
+            border: 1px solid #ddd;
+            border-radius: 4px;
+            font-size: 14px;
+            box-sizing: border-box;
+        }
+
+        .modal-content select {
+            width: 100%;
+            padding: 8px 10px;
+            margin: 10px 0;
+            border: 1px solid #ddd;
+            border-radius: 4px;
+            font-size: 14px;
+            box-sizing: border-box;
+        }
+
+        .modal-buttons {
+            display: flex;
+            justify-content: flex-end;
+            gap: 10px;
+            margin-top: 20px;
+        }
 
         /* 特定于监控对话框的按钮样式 */
         #monitorModal .modal-buttons {
             margin-top: 20px;
             justify-content: flex-end;
         }
-        .modal-btn { padding: 8px 16px; border: none; border-radius: 4px; cursor: pointer; }
-        .modal-btn.cancel { background: #eee; }
-        .modal-btn.save { background: #3498db; color: white; }
+
+        .modal-btn {
+            padding: 8px 16px;
+            border: none;
+            border-radius: 4px;
+            cursor: pointer;
+        }
+
+        .modal-btn.cancel {
+            background: #95a5a6;
+            color: white;
+        }
+
+        .modal-btn.save {
+            background: #3498db;
+            color: white;
+        }
 
         /* 表单网格布局 */
         .form-grid {
@@ -312,10 +396,23 @@
             .modal-content {
                 width: 95%;
                 margin: 20px auto;
+                max-width: 95%;
+                min-width: 90%;
             }
 
             .search-results {
                 max-height: 200px;
+            }
+
+            /* 移动设备上模态框的特殊处理 */
+            .modal {
+                padding-top: 20px;
+            }
+
+            #monitorModal .modal-content {
+                max-width: 95%;
+                width: 95%;
+                margin: 10px auto;
             }
         }
 
@@ -349,6 +446,20 @@
             .footer-status {
                 font-size: 10px;
                 padding: 5px 8px;
+            }
+
+            /* 小屏幕设备上模态框的特殊处理 */
+            .modal-content {
+                width: 95%;
+                margin: 10px auto;
+                padding: 15px;
+            }
+
+            #monitorModal .modal-content {
+                max-width: 95%;
+                width: 95%;
+                margin: 10px auto;
+                padding: 15px;
             }
         }
 
@@ -1502,17 +1613,64 @@
             }
         }
 
+        // 当前打开的模态框跟踪
+        let currentOpenModal = null;
+
         // 打开价格监控对话框
         function openMonitorDialog(symbol, name) {
+            // 关闭当前打开的任何模态框
+            if (currentOpenModal) {
+                currentOpenModal.style.display = 'none';
+            }
+
             document.getElementById('monitorSymbol').value = symbol;
             document.getElementById('monitorName').value = name;
             document.getElementById('monitorThreshold').value = '';
-            document.getElementById('monitorModal').style.display = 'flex';
+            const modal = document.getElementById('monitorModal');
+            modal.style.display = 'flex';
+            currentOpenModal = modal;
         }
 
         // 关闭价格监控对话框
         function closeMonitorDialog() {
-            document.getElementById('monitorModal').style.display = 'none';
+            const modal = document.getElementById('monitorModal');
+            modal.style.display = 'none';
+            if (currentOpenModal === modal) {
+                currentOpenModal = null;
+            }
+        }
+
+        // 关闭设置模态框
+        function closeSettings() {
+            const modal = document.getElementById('settingsModal');
+            modal.style.display = 'none';
+            if (currentOpenModal === modal) {
+                currentOpenModal = null;
+            }
+        }
+
+        // 关闭指数配置模态框
+        function closeIndexConfig() {
+            const modal = document.getElementById('indexConfigModal');
+            if (modal) {
+                modal.style.display = 'none';
+                if (currentOpenModal === modal) {
+                    currentOpenModal = null;
+                }
+            }
+        }
+
+        // 点击模态框背景关闭模态框
+        window.onclick = function(event) {
+            const modals = document.querySelectorAll('.modal');
+            modals.forEach(modal => {
+                if (event.target === modal) {
+                    modal.style.display = 'none';
+                    if (currentOpenModal === modal) {
+                        currentOpenModal = null;
+                    }
+                }
+            });
         }
 
         // 添加价格监控条件
@@ -1612,5 +1770,8 @@
             </div>
         </div>
     </div>
+
+    <!-- 确保页面底部有足够的空间 -->
+    <div style="height: 20px;"></div>
 </body>
 </html>
