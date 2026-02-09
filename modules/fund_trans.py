@@ -14,7 +14,8 @@ from modules.models import (
     load_fund_transactions,
     import_excel_transactions, export_excel_transactions, app_logger,
     add_fund_transaction, update_fund_transaction, delete_fund_transaction, get_db_connection,
-    get_fund_cache, set_fund_cache, get_fund_cache_date
+    get_fund_cache, set_fund_cache, get_fund_cache_date,
+    is_fund_summary_computing, set_fund_summary_computing
 )
 
 fund_trans_bp = Blueprint('fund_trans', __name__)
@@ -835,7 +836,7 @@ def export_transactions():
 
 def get_cached_summary(use_cache: bool = True) -> Dict:
     """
-    获取缓存的汇总数据
+    获取缓存的汇总数据（线程安全）
     use_cache: 是否使用缓存
     返回: 汇总数据字典
     """
@@ -849,15 +850,40 @@ def get_cached_summary(use_cache: bool = True) -> Dict:
             app_logger.info(f"[缓存] 使用缓存的基金汇总数据 ({today})")
             return cached
 
-    # 没有缓存，重新计算
-    app_logger.info(f"[缓存] 重新计算基金汇总数据")
-    transactions = load_fund_transactions()
-    summary = calculate_fund_summary(transactions)
+    # 没有缓存，检查是否正在计算中
+    if is_fund_summary_computing():
+        app_logger.info(f"[缓存] 汇总正在计算中，等待完成后重试...")
+        # 等待最多30秒，每0.5秒检查一次
+        for _ in range(60):
+            time.sleep(0.5)
+            cached = get_fund_cache(cache_key, today)
+            if cached:
+                app_logger.info(f"[缓存] 等待后获取到缓存数据 ({today})")
+                return cached
+        app_logger.warning(f"[缓存] 等待缓存超时，将返回空数据")
 
-    # 更新缓存
-    set_fund_cache(cache_key, summary, today)
+    # 获取锁并计算
+    with _fund_summary_lock:
+        # 双重检查缓存（可能其他线程已计算完成）
+        cached = get_fund_cache(cache_key, today)
+        if cached:
+            app_logger.info(f"[缓存] 获取锁后使用缓存 ({today})")
+            return cached
 
-    return summary
+        # 标记正在计算
+        set_fund_summary_computing(True)
+        try:
+            app_logger.info(f"[缓存] 开始重新计算基金汇总数据")
+            transactions = load_fund_transactions()
+            summary = calculate_fund_summary(transactions)
+
+            # 更新缓存
+            set_fund_cache(cache_key, summary, today)
+            app_logger.info(f"[缓存] 基金汇总计算完成，已写入缓存")
+
+            return summary
+        finally:
+            set_fund_summary_computing(False)
 
 
 def refresh_fund_cache(force: bool = False) -> Dict:

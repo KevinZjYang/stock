@@ -1679,5 +1679,24 @@ def clear_fund_cache(cache_key: str = None, cache_date: str = None):
         conn.close()
 
 
+# ==================== 线程锁和计算状态管理 ====================
+
+# 基金汇总计算锁 - 防止并发重复计算
+_fund_summary_lock = threading.Lock()
+_fund_summary_computing = False  # 是否正在计算汇总
+
+
+def is_fund_summary_computing() -> bool:
+    """检查是否正在计算汇总"""
+    global _fund_summary_computing
+    return _fund_summary_computing
+
+
+def set_fund_summary_computing(computing: bool):
+    """设置计算状态"""
+    global _fund_summary_computing
+    _fund_summary_computing = computing
+
+
 
 
