@@ -381,21 +381,22 @@ def get_stock_realtime_data(code: str) -> Optional[Dict[str, Any]]:
         app_logger.error(f"获取 {code} (雪球) 价格时发生错误: {e}")
         return None
 
+
 def get_stock_realtime_data_batch(codes: List[str]) -> List[Dict[str, Any]]:
     """批量获取股票实时数据"""
     if not codes:
         return []
 
+    # 标准化所有代码
+    normalized_codes = [normalize_stock_code(code) for code in codes]
+
+    # 获取对应的雪球符号
+    xueqiu_symbols = [get_xueqiu_market_prefix(code) for code in normalized_codes]
+
+    # 打印日志
+    app_logger.info(f"开始批量获取股票实时数据: 数量={len(normalized_codes)}, 代码={','.join(normalized_codes[:5])}{'...' if len(normalized_codes) > 5 else ''}")
+
     try:
-        # 标准化所有代码
-        normalized_codes = [normalize_stock_code(code) for code in codes]
-
-        # 获取对应的雪球符号
-        xueqiu_symbols = [get_xueqiu_market_prefix(code) for code in normalized_codes]
-
-        # 打印日志，注意只打印一次
-        app_logger.info(f"开始批量获取股票实时数据: 数量={len(normalized_codes)}, 代码={','.join(normalized_codes[:5])}{'...' if len(normalized_codes) > 5 else ''}")
-
         # 构建参数，将所有symbol用逗号连接
         params = {"symbol": ",".join(xueqiu_symbols)}
 

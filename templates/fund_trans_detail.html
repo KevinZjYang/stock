@@ -1021,15 +1021,53 @@
             }
         });
 
+        // ========== 请求去重机制 ==========
+        const requestCache = new Map();
+        const pendingPromises = new Map();
+
+        async function cachedFetch(url, options = {}) {
+            const cacheKey = url;
+
+            // 检查是否有正在进行的相同请求
+            if (pendingPromises.has(cacheKey)) {
+                return pendingPromises.get(cacheKey);
+            }
+
+            // 检查缓存（5秒内有效）
+            const cached = requestCache.get(cacheKey);
+            if (cached && (Date.now() - cached.time < 5000)) {
+                return Promise.resolve(cached.data);
+            }
+
+            // 创建新的请求
+            const promise = fetch(url, options)
+                .then(res => {
+                    if (!res.ok) throw new Error(`HTTP ${res.status}`);
+                    return res.json();
+                })
+                .then(data => {
+                    // 存入缓存
+                    requestCache.set(cacheKey, { data, time: Date.now() });
+                    pendingPromises.delete(cacheKey);
+                    return data;
+                })
+                .catch(err => {
+                    pendingPromises.delete(cacheKey);
+                    throw err;
+                });
+
+            pendingPromises.set(cacheKey, promise);
+            return promise;
+        }
+
         function loadData() {
             showLoading();
-            // 一次性获取交易记录和汇总数据（避免重复计算）
-            fetch('/api/fund_trans/transactions')
-                .then(res => res.json())
+            // 使用带缓存的请求，避免重复调用
+            cachedFetch('/api/fund_trans/transactions')
                 .then(data => {
                     // 检查返回的数据结构
                     if (data.transactions !== undefined && data.summary !== undefined) {
-                        // 数据结构为 {transactions: [...], summary: {...}}
+                        // 新数据结构为 {transactions: [...], summary: {...}}
                         renderSummary(data.summary);
                         renderTable(data.transactions);
                     } else {
