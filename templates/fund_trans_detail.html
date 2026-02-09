@@ -463,6 +463,166 @@
             to { opacity: 1; transform: translateY(0); }
         }
 
+        /* ========== 汇总页面增强样式 ========== */
+        .summary-enhanced {
+            background: white;
+            border-radius: 12px;
+            padding: 20px;
+            margin-bottom: 20px;
+            box-shadow: 0 2px 8px rgba(0,0,0,0.05);
+        }
+
+        .summary-enhanced h3 {
+            margin: 0 0 15px 0;
+            color: #2c3e50;
+            font-size: 15px;
+            font-weight: 600;
+            display: flex;
+            align-items: center;
+            gap: 8px;
+        }
+
+        /* Top 排行样式 */
+        .top-rank-list {
+            display: flex;
+            flex-direction: column;
+            gap: 10px;
+        }
+
+        .top-rank-item {
+            display: flex;
+            align-items: center;
+            gap: 12px;
+            padding: 10px 12px;
+            background: #f8f9fa;
+            border-radius: 8px;
+            transition: background 0.2s;
+        }
+
+        .top-rank-item:hover {
+            background: #e8f4fc;
+        }
+
+        .rank-badge {
+            width: 24px;
+            height: 24px;
+            border-radius: 50%;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 12px;
+            font-weight: 700;
+            color: white;
+        }
+
+        .rank-badge.gold { background: linear-gradient(135deg, #f59e0b, #d97706); }
+        .rank-badge.silver { background: linear-gradient(135deg, #9ca3af, #6b7280); }
+        .rank-badge.bronze { background: linear-gradient(135deg, #d97706, #92400e); }
+
+        .rank-info {
+            flex: 1;
+        }
+
+        .rank-code {
+            font-weight: 600;
+            color: #2c3e50;
+            font-size: 13px;
+        }
+
+        .rank-name {
+            font-size: 11px;
+            color: #7f8c8d;
+        }
+
+        .rank-value {
+            font-weight: 700;
+            font-size: 14px;
+        }
+
+        /* 进度条样式 */
+        .progress-section {
+            margin-bottom: 15px;
+        }
+
+        .progress-header {
+            display: flex;
+            justify-content: space-between;
+            margin-bottom: 8px;
+            font-size: 13px;
+        }
+
+        .progress-bar-container {
+            height: 12px;
+            background: #e8f4fc;
+            border-radius: 6px;
+            overflow: hidden;
+            position: relative;
+        }
+
+        .progress-bar {
+            height: 100%;
+            border-radius: 6px;
+            transition: width 0.5s ease;
+            position: relative;
+        }
+
+        .progress-bar.positive { background: linear-gradient(90deg, #27ae60, #2ecc71); }
+        .progress-bar.negative { background: linear-gradient(90deg, #e74c3c, #c0392b); }
+
+        .progress-rate {
+            font-size: 11px;
+            color: #7f8c8d;
+        }
+
+        /* 资产配置简图 */
+        .asset-allocation {
+            display: flex;
+            flex-direction: column;
+            gap: 8px;
+        }
+
+        .allocation-item {
+            display: flex;
+            align-items: center;
+            gap: 10px;
+        }
+
+        .allocation-bar-wrap {
+            flex: 1;
+            display: flex;
+            align-items: center;
+            gap: 8px;
+        }
+
+        .allocation-bar-bg {
+            flex: 1;
+            height: 8px;
+            background: #f0f0f0;
+            border-radius: 4px;
+            overflow: hidden;
+        }
+
+        .allocation-bar {
+            height: 100%;
+            border-radius: 4px;
+            transition: width 0.5s ease;
+        }
+
+        .allocation-percent {
+            width: 40px;
+            text-align: right;
+            font-size: 12px;
+            font-weight: 600;
+            color: #2c3e50;
+        }
+
+        .allocation-code {
+            width: 60px;
+            font-size: 12px;
+            font-weight: 600;
+            color: #555;
+        }
+
         /* ========== 标签页内容区域 ========== */
         .tab-panel {
             background: white;
@@ -921,7 +1081,7 @@
         function renderSummary(data) {
             const panel = document.getElementById('summaryPanel');
 
-            // --- 关键修改：根据正负号决定颜色 ---
+            // 基础数据
             const realizedProfit = data.realized_profit || 0;
             const realizedClass = realizedProfit >= 0 ? 'profit' : 'loss';
             const realizedValueClass = realizedProfit >= 0 ? 'profit-value' : 'loss-value';
@@ -929,8 +1089,9 @@
             const marketValue = data.market_value || 0;
             const totalCost = Math.abs(data.total_cost || 0);
             const totalShares = data.total_shares || 0;
+            const dividendTotal = data.dividend_total || 0;
 
-            // 计算浮动盈亏 (市值 - 成本)
+            // 浮动盈亏
             const floatingProfit = marketValue - totalCost;
             const floatingClass = floatingProfit >= 0 ? 'profit' : 'loss';
             const floatingValueClass = floatingProfit >= 0 ? 'profit-value' : 'loss-value';
@@ -942,36 +1103,140 @@
                 : '--';
             const overallXirrClass = overallXirr !== null && overallXirr >= 0 ? 'profit-value' : (overallXirr !== null ? 'loss-value' : '');
 
+            // 计算收益率百分比
+            const profitRate = totalCost > 0 ? (floatingProfit / totalCost * 100) : 0;
+            const rateWidth = Math.min(Math.abs(profitRate), 100);
+            const rateClass = profitRate >= 0 ? 'positive' : 'negative';
+
+            // 准备 Top 排行数据 (合并持仓和已清仓)
+            const allFunds = [
+                ...(data.fund_performance || []).map(f => ({...f, status: '持仓'})),
+                ...(data.sold_funds_xirr || []).map(f => ({...f, status: '已清仓', shares: 0, cost: 0, market_value: 0}))
+            ];
+
+            // 按年化收益排序，取 Top 3
+            const topFunds = allFunds
+                .filter(f => f.xirr !== null)
+                .sort((a, b) => b.xirr - a.xirr)
+                .slice(0, 3);
+
+            // 资产配置 (按市值排序前5)
+            const allocationFunds = (data.fund_performance || [])
+                .sort((a, b) => (b.market_value || 0) - (a.market_value || 0))
+                .slice(0, 5);
+
+            // 生成 Top 排行 HTML
+            const topRankHtml = topFunds.length > 0 ? topFunds.map((fund, index) => {
+                const badges = ['gold', 'silver', 'bronze'];
+                const rankClass = badges[index] || '';
+                const xirrSign = fund.xirr >= 0 ? '+' : '';
+                return `
+                    <div class="top-rank-item">
+                        <div class="rank-badge ${rankClass}">${index + 1}</div>
+                        <div class="rank-info">
+                            <div class="rank-code">${fund.code}</div>
+                            <div class="rank-name">${fund.name || '--'}</div>
+                        </div>
+                        <div class="rank-value ${fund.xirr >= 0 ? 'profit-value' : 'loss-value'}">
+                            ${xirrSign}${fund.xirr.toFixed(2)}%
+                        </div>
+                    </div>
+                `;
+            }).join('') : '<div style="color:#999;font-size:13px;">暂无收益数据</div>';
+
+            // 生成资产配置 HTML
+            const totalMv = allocationFunds.reduce((sum, f) => sum + (f.market_value || 0), 0);
+            const colors = ['#3498db', '#2ecc71', '#9b59b6', '#f39c12', '#e74c3c'];
+            const allocationHtml = allocationFunds.length > 0 ? allocationFunds.map((fund, index) => {
+                const percent = totalMv > 0 ? (fund.market_value / totalMv * 100) : 0;
+                return `
+                    <div class="allocation-item">
+                        <div class="allocation-code">${fund.code}</div>
+                        <div class="allocation-bar-wrap">
+                            <div class="allocation-bar-bg">
+                                <div class="allocation-bar" style="width:${percent}%;background:${colors[index]}"></div>
+                            </div>
+                            <div class="allocation-percent">${percent.toFixed(1)}%</div>
+                        </div>
+                    </div>
+                `;
+            }).join('') : '<div style="color:#999;font-size:13px;">暂无持仓数据</div>';
+
             panel.innerHTML = `
-                <div class="summary-card primary">
-                    <div class="summary-title">当前持仓市值</div>
-                    <div class="summary-value">${marketValue.toFixed(2)}</div>
-                    <div class="summary-detail">份额: ${totalShares.toFixed(2)}</div>
+                <!-- 第一行：核心指标卡片 -->
+                <div class="summary-container">
+                    <div class="summary-card primary">
+                        <div class="summary-title">当前持仓市值</div>
+                        <div class="summary-value">¥${marketValue.toFixed(2)}</div>
+                        <div class="summary-detail">份额: ${totalShares.toFixed(2)}</div>
+                    </div>
+                    <div class="summary-card">
+                        <div class="summary-title">总投入金额</div>
+                        <div class="summary-value">¥${totalCost.toFixed(2)}</div>
+                        <div class="summary-detail">买入累计</div>
+                    </div>
+                    <div class="summary-card ${floatingClass}">
+                        <div class="summary-title">浮动盈亏</div>
+                        <div class="summary-value ${floatingValueClass}">¥${floatingProfit.toFixed(2)}</div>
+                        <div class="summary-detail">${profitRate >= 0 ? '+' : ''}${profitRate.toFixed(2)}%</div>
+                    </div>
+                    <div class="summary-card ${realizedClass}">
+                        <div class="summary-title">已实现盈亏</div>
+                        <div class="summary-value ${realizedValueClass}">¥${realizedProfit.toFixed(2)}</div>
+                        <div class="summary-detail">分红: ¥${dividendTotal.toFixed(2)}</div>
+                    </div>
+                    <div class="summary-card ${overallXirrClass || 'info'}">
+                        <div class="summary-title">整体年化收益</div>
+                        <div class="summary-value ${overallXirrClass}">${overallXirrDisplay}</div>
+                        <div class="summary-detail">XIRR算法</div>
+                    </div>
+                    <div class="summary-card info">
+                        <div class="summary-title">交易统计</div>
+                        <div class="summary-value">${data.trade_count} 笔</div>
+                        <div class="summary-detail">买: ${data.buy_count} | 卖: ${data.sell_count}</div>
+                    </div>
                 </div>
-                <div class="summary-card">
-                    <div class="summary-title">总投入金额</div>
-                    <div class="summary-value">${totalCost.toFixed(2)}</div>
-                    <div class="summary-detail">基于买入金额计算</div>
-                </div>
-                <div class="summary-card ${floatingClass}">
-                    <div class="summary-title">浮动盈亏</div>
-                    <div class="summary-value ${floatingValueClass}">${floatingProfit.toFixed(2)}</div>
-                    <div class="summary-detail">市值 - 成本</div>
-                </div>
-                <div class="summary-card ${realizedClass}">
-                    <div class="summary-title">已实现盈亏</div>
-                    <div class="summary-value ${realizedValueClass}">${realizedProfit.toFixed(2)}</div>
-                    <div class="summary-detail">分红: ${data.dividend_total.toFixed(2)}</div>
-                </div>
-                <div class="summary-card ${overallXirrClass}">
-                    <div class="summary-title">整体年化收益</div>
-                    <div class="summary-value ${overallXirrClass}">${overallXirrDisplay}</div>
-                    <div class="summary-detail">XIRR算法</div>
-                </div>
-                <div class="summary-card info">
-                    <div class="summary-title">交易统计</div>
-                    <div class="summary-value">${data.trade_count}</div>
-                    <div class="summary-detail">买入: ${data.buy_count} | 卖出: ${data.sell_count} | 分红: ${data.dividend_count}</div>
+
+                <!-- 第二行：收益率进度条 + Top排行 + 资产配置 -->
+                <div style="display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 15px;">
+                    <!-- 收益率进度条 -->
+                    <div class="summary-enhanced">
+                        <h3>📈 收益率趋势</h3>
+                        <div class="progress-section">
+                            <div class="progress-header">
+                                <span>浮动盈亏</span>
+                                <span class="progress-rate ${floatingValueClass}">${profitRate >= 0 ? '+' : ''}${profitRate.toFixed(2)}%</span>
+                            </div>
+                            <div class="progress-bar-container">
+                                <div class="progress-bar ${rateClass}" style="width: ${rateWidth}%"></div>
+                            </div>
+                        </div>
+                        <div class="progress-section" style="margin-bottom:0">
+                            <div class="progress-header">
+                                <span>整体年化</span>
+                                <span class="progress-rate ${overallXirrClass}">${overallXirrDisplay}</span>
+                            </div>
+                            <div class="progress-bar-container">
+                                <div class="progress-bar ${overallXirr !== null && overallXirr >= 0 ? 'positive' : 'negative'}" style="width: ${Math.min(Math.abs(overallXirr || 0), 100)}%"></div>
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- Top 收益排行 -->
+                    <div class="summary-enhanced">
+                        <h3>🏆 Top 收益排行</h3>
+                        <div class="top-rank-list">
+                            ${topRankHtml}
+                        </div>
+                    </div>
+
+                    <!-- 资产配置 -->
+                    <div class="summary-enhanced">
+                        <h3>💼 持仓分布</h3>
+                        <div class="asset-allocation">
+                            ${allocationHtml}
+                        </div>
+                    </div>
                 </div>
             `;
 
