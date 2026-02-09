@@ -413,74 +413,156 @@
         .confirm-btn.cancel:hover {
             background: #7f8c8d;
         }
+
+        /* ========== 标签页样式 ========== */
+        .tab-container {
+            margin-bottom: 20px;
+        }
+
+        .tab-nav {
+            display: flex;
+            gap: 5px;
+            border-bottom: 2px solid #e0e0e0;
+            margin-bottom: 20px;
+        }
+
+        .tab-item {
+            padding: 12px 24px;
+            cursor: pointer;
+            border: none;
+            background: none;
+            font-size: 14px;
+            font-weight: 600;
+            color: #7f8c8d;
+            border-bottom: 3px solid transparent;
+            margin-bottom: -2px;
+            transition: all 0.2s;
+        }
+
+        .tab-item:hover {
+            color: #3498db;
+            background: #f8f9fa;
+        }
+
+        .tab-item.active {
+            color: #3498db;
+            border-bottom-color: #3498db;
+        }
+
+        .tab-content {
+            display: none;
+        }
+
+        .tab-content.active {
+            display: block;
+            animation: fadeIn 0.2s ease;
+        }
+
+        @keyframes fadeIn {
+            from { opacity: 0; transform: translateY(5px); }
+            to { opacity: 1; transform: translateY(0); }
+        }
+
+        /* ========== 标签页内容区域 ========== */
+        .tab-panel {
+            background: white;
+            border-radius: 8px;
+            padding: 20px;
+            box-shadow: 0 2px 8px rgba(0,0,0,0.05);
+            margin-bottom: 20px;
+        }
+
+        .tab-panel h3 {
+            margin: 0 0 15px 0;
+            color: #2c3e50;
+            font-size: 16px;
+        }
     </style>
 </head>
 <body>
     <!-- Loading 遮罩 -->
     <div id="loadingOverlay">处理中...</div>
 
-    <!-- 统计面板 -->
-    <div class="summary-container" id="summaryPanel">
-        <!-- 动态生成 -->
-        <div class="summary-card"><div class="summary-title">加载中...</div></div>
+    <!-- 标签页导航 -->
+    <div class="tab-container">
+        <div class="tab-nav">
+            <button class="tab-item active" data-tab="summary" onclick="switchTab('summary')">
+                📊 汇总
+            </button>
+            <button class="tab-item" data-tab="holdings" onclick="switchTab('holdings')">
+                💼 持仓收益
+            </button>
+            <button class="tab-item" data-tab="transactions" onclick="switchTab('transactions')">
+                📝 交易记录
+            </button>
+        </div>
     </div>
 
-    <!-- 各基金收益对比 -->
-    <div class="table-container" id="performancePanel" style="display: none;">
-        <h3 style="padding: 15px 20px 10px; margin: 0; color: #2c3e50;">各基金收益对比</h3>
-        <table>
-            <thead>
-                <tr>
-                    <th>基金代码</th>
-                    <th>基金名称</th>
-                    <th>状态</th>
-                    <th>持仓份额</th>
-                    <th>持仓成本</th>
-                    <th>持仓市值</th>
-                    <th>年化收益率</th>
-                </tr>
-            </thead>
-            <tbody id="performanceBody">
-                <!-- 动态生成 -->
-            </tbody>
-        </table>
+    <!-- 标签页内容 -->
+    <div class="tab-content active" id="tab-summary">
+        <!-- 统计面板 -->
+        <div class="summary-container" id="summaryPanel">
+            <!-- 动态生成 -->
+            <div class="summary-card"><div class="summary-title">加载中...</div></div>
+        </div>
     </div>
 
-    <!-- 操作按钮区域 -->
-    <div class="action-bar">
-        <button class="btn btn-primary" onclick="openModal()">添加交易记录</button>
-        <!-- 新增导入导出按钮 -->
-        <button class="btn btn-success" onclick="document.getElementById('fileInput').click()">导入 Excel</button>
-        <button class="btn btn-secondary" onclick="handleExport()">导出 Excel</button>
-        <!-- 新增：刷新市值按钮 -->
-        <button class="btn btn-warning" onclick="refreshMarketValue()">刷新市值</button>
-        <!-- 新增：清空所有记录按钮 -->
-        <button class="btn btn-danger" onclick="clearAllRecords()">清空所有记录</button>
-        
-        <!-- 隐藏的文件输入框 -->
-        <input type="file" id="fileInput" accept=".xlsx, .xls" style="display: none;" onchange="handleImport(this)">
+    <div class="tab-content" id="tab-holdings">
+        <!-- 各基金收益对比 -->
+        <div class="table-container" id="performancePanel">
+            <table>
+                <thead>
+                    <tr>
+                        <th>基金代码</th>
+                        <th>基金名称</th>
+                        <th>状态</th>
+                        <th>持仓份额</th>
+                        <th>持仓成本</th>
+                        <th>持仓市值</th>
+                        <th>已实现盈亏</th>
+                        <th>收益率</th>
+                        <th>年化收益率</th>
+                    </tr>
+                </thead>
+                <tbody id="performanceBody">
+                    <!-- 动态生成 -->
+                </tbody>
+            </table>
+        </div>
     </div>
 
-    <!-- 数据表格 -->
-    <div class="table-container">
-        <table>
-            <thead>
-                <tr>
-                    <th>日期</th>
-                    <th>名称</th>
-                    <th>基金代码</th>
-                    <th>交易类型</th>
-                    <th>金额</th>
-                    <th>份额</th>
-                    <th>价格</th>
-                    <th>手续费</th>
-                    <th>操作</th>
-                </tr>
-            </thead>
-            <tbody id="tableBody">
-                <!-- 动态生成 -->
-            </tbody>
-        </table>
+    <div class="tab-content" id="tab-transactions">
+        <!-- 操作按钮区域 -->
+        <div class="action-bar">
+            <button class="btn btn-primary" onclick="openModal()">添加交易记录</button>
+            <button class="btn btn-success" onclick="document.getElementById('fileInput').click()">导入 Excel</button>
+            <button class="btn btn-secondary" onclick="handleExport()">导出 Excel</button>
+            <button class="btn btn-warning" onclick="refreshMarketValue()">刷新市值</button>
+            <button class="btn btn-danger" onclick="clearAllRecords()">清空所有记录</button>
+            <input type="file" id="fileInput" accept=".xlsx, .xls" style="display: none;" onchange="handleImport(this)">
+        </div>
+
+        <!-- 数据表格 -->
+        <div class="table-container">
+            <table>
+                <thead>
+                    <tr>
+                        <th>日期</th>
+                        <th>名称</th>
+                        <th>基金代码</th>
+                        <th>交易类型</th>
+                        <th>金额</th>
+                        <th>份额</th>
+                        <th>价格</th>
+                        <th>手续费</th>
+                        <th>操作</th>
+                    </tr>
+                </thead>
+                <tbody id="tableBody">
+                    <!-- 动态生成 -->
+                </tbody>
+            </table>
+        </div>
     </div>
 
     <!-- 编辑/新增 模态框 -->
@@ -561,6 +643,21 @@
             loadData();
             setTodayDate();
         });
+
+        // ========== 标签页切换 ==========
+        function switchTab(tabName) {
+            // 移除所有激活状态
+            document.querySelectorAll('.tab-item').forEach(item => {
+                item.classList.remove('active');
+            });
+            document.querySelectorAll('.tab-content').forEach(content => {
+                content.classList.remove('active');
+            });
+
+            // 激活当前标签
+            document.querySelector(`.tab-item[data-tab="${tabName}"]`).classList.add('active');
+            document.getElementById(`tab-${tabName}`).classList.add('active');
+        }
 
         function setTodayDate() {
             const today = new Date();
