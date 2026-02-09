@@ -6,13 +6,15 @@ import requests
 import time
 import math
 from datetime import datetime
+from typing import Dict, List, Optional  # 添加类型注解导入
 # 添加上级目录到路径，以便导入 models.py
 sys.path.append(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
 from modules.models import (
     load_fund_transactions,
     import_excel_transactions, export_excel_transactions, app_logger,
-    add_fund_transaction, update_fund_transaction, delete_fund_transaction, get_db_connection
+    add_fund_transaction, update_fund_transaction, delete_fund_transaction, get_db_connection,
+    get_fund_cache, set_fund_cache, get_fund_cache_date
 )
 
 fund_trans_bp = Blueprint('fund_trans', __name__)
