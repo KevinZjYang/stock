@@ -4,171 +4,23 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>基金查询</title>
+    <link rel="stylesheet" href="/static/css/common.css">
     <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
     <style>
+        /* 基金页面特定样式 */
         body { font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif; background: #f8f9fa; margin: 0; padding: 0; color: #333; }
-        
-        /* 输入区域容器 */
-        .input-container {
-            position: relative; /* 用于定位下拉列表 */
-            background: white; 
-            padding: 15px 20px; 
-            border-bottom: 1px solid #e0e0e0;
-            display: flex; 
-            gap: 10px; 
-            align-items: center; 
-            flex-wrap: wrap;
-        }
-        
-        .input-area {
-            display: flex;
-            gap: 10px;
-            flex: 1;
-            min-width: 300px;
-            position: relative; /* 用于定位下拉列表 */
-        }
 
-        .input-area input {
-            padding: 8px 12px; 
-            border: 1px solid #ccc; 
-            border-radius: 4px; 
-            flex: 1; 
-            min-width: 120px;
-            font-size: 14px;
-        }
-        
-        .input-area input:focus {
-            border-color: #3498db;
-            outline: none;
-        }
-
-        /* 统一按钮样式 */
-        .btn {
-            padding: 8px 16px;
-            border: none;
-            border-radius: 4px;
-            cursor: pointer;
-            font-size: 14px;
-            font-weight: 600;
-            transition: all 0.2s;
-            text-decoration: none;
-            display: inline-block;
-            text-align: center;
-            vertical-align: middle;
-            user-select: none;
-        }
-
-        .btn-sm {
-            padding: 6px 12px;
-            font-size: 12px;
-        }
-
-        .btn-lg {
-            padding: 12px 24px;
-            font-size: 16px;
-        }
-
-        .btn-primary {
-            background: #3498db;
-            color: white;
-        }
-
-        .btn-primary:hover {
-            background: #2980b9;
-        }
-
-        .btn-settings {
-            background: #95a5a6;
-            color: white;
-        }
-
-        .btn-settings:hover {
-            background: #7f8c8d;
-        }
-
-        .btn-success {
-            background: #27ae60;
-            color: white;
-        }
-
-        .btn-success:hover {
-            background: #219150;
-        }
-
-        .btn-danger {
-            background: #e74c3c;
-            color: white;
-        }
-
-        .btn-danger:hover {
-            background: #c0392b;
-        }
-
-        .btn-warning {
-            background: #f39c12;
-            color: white;
-        }
-
-        .btn-warning:hover {
-            background: #e67e22;
-        }
-
-        .btn:disabled {
-            opacity: 0.6;
-            cursor: not-allowed;
-        }
+        /* 输入区域 */
+        .input-container { position: relative; background: white; padding: 15px 20px; border-bottom: 1px solid #e0e0e0; display: flex; gap: 10px; align-items: center; flex-wrap: wrap; }
+        .input-area { display: flex; gap: 10px; flex: 1; min-width: 300px; position: relative; }
 
         /* 搜索结果下拉列表 */
-        .search-results {
-            position: absolute;
-            top: 100%;
-            left: 0;
-            right: 0;
-            background: white;
-            border: 1px solid #ccc;
-            border-top: none;
-            border-radius: 0 0 4px 4px;
-            max-height: 300px;
-            overflow-y: auto;
-            z-index: 1000;
-            display: none; /* 默认隐藏 */
-            box-shadow: 0 4px 6px rgba(0,0,0,0.1);
-        }
-
-        .search-result-item {
-            padding: 8px 12px;
-            cursor: pointer;
-            display: flex;
-            justify-content: space-between;
-            align-items: center;
-            border-bottom: 1px solid #f0f0f0;
-            font-size: 13px;
-        }
-
-        .search-result-item:hover {
-            background-color: #f5f5f5;
-        }
-
-        .result-code {
-            font-weight: bold;
-            color: #2c3e50;
-            min-width: 60px;
-        }
-
-        .result-name {
-            color: #555;
-            flex: 1;
-            text-align: left;
-            margin-left: 10px;
-        }
-
-        .result-type {
-            font-size: 10px;
-            padding: 2px 6px;
-            border-radius: 3px;
-            background: #eee;
-            color: #666;
-        }
+        .search-results { position: absolute; top: 100%; left: 0; right: 0; background: white; border: 1px solid #ccc; border-top: none; border-radius: 0 0 4px 4px; max-height: 300px; overflow-y: auto; z-index: 1000; display: none; box-shadow: 0 4px 6px rgba(0,0,0,0.1); }
+        .search-result-item { padding: 8px 12px; cursor: pointer; display: flex; justify-content: space-between; align-items: center; border-bottom: 1px solid #f0f0f0; font-size: 13px; }
+        .search-result-item:hover { background-color: #f5f5f5; }
+        .result-code { font-weight: bold; color: #2c3e50; min-width: 60px; }
+        .result-name { color: #555; flex: 1; text-align: left; margin-left: 10px; }
+        .result-type { font-size: 10px; padding: 2px 6px; border-radius: 3px; background: #eee; color: #666; }
 
         /* 表格 */
         .table-container { padding: 20px; overflow-x: auto; }
@@ -176,105 +28,40 @@
         th, td { padding: 12px; text-align: left; border-bottom: 1px solid #eee; font-size: 13px; white-space: nowrap; }
         th { background: #f8f9fa; font-weight: 600; color: #555; }
         tr:hover { background: #f1f1f1; }
-        
-        /* 状态颜色 */
-        .positive { color: #e74c3c; font-weight: bold; } /* 涨为红 */
-        .negative { color: #27ae60; font-weight: bold; } /* 跌为绿 */
+
+        /* 状态颜色 - 涨红跌绿 */
+        .positive { color: #e74c3c; font-weight: bold; }
+        .negative { color: #27ae60; font-weight: bold; }
         .neutral { color: #7f8c8d; }
 
         /* 底部状态 */
         .footer-status { padding: 8px 20px; font-size: 12px; color: #666; background: white; border-top: 1px solid #e0e0e0; }
         .footer-status.error { color: #e74c3c; }
         .footer-status.paused { color: #f39c12; }
+        .footer-status.refreshing { color: #3498db; }
+        .footer-status.closed { color: #7f8c8d; }
 
-        /* 模态框 */
-        .modal { display: none; position: fixed; top: 0; left: 0; width: 100%; height: 100%; background: rgba(0,0,0,0.5); z-index: 1000; justify-content: center; align-items: center; }
-        .modal-content { background: white; padding: 20px; border-radius: 8px; width: 90%; max-width: 400px; }
-        .modal-content h3 { margin-top: 0; }
-        .modal-content input { width: 100%; padding: 8px; margin: 10px 0; border: 1px solid #ccc; border-radius: 4px; }
+        /* 图表 */
+        #fundChartContainer { position: relative; height: 400px; width: 100%; }
+        .chart-loading { display: flex; justify-content: center; align-items: center; height: 100%; font-size: 16px; color: #666; }
 
-        /* Toast */
-        #localToastContainer { position: fixed; bottom: 20px; left: 50%; transform: translateX(-50%); z-index: 3000; display: flex; flex-direction: column; gap: 10px; width: 90%; max-width: 400px; pointer-events: none; }
-
-        /* 自定义确认对话框 */
-        .confirm-modal {
-            display: none;
-            position: fixed;
-            top: 0;
-            left: 0;
-            width: 100%;
-            height: 100%;
-            background: rgba(0,0,0,0.5);
-            z-index: 2000;
-            justify-content: center;
-            align-items: center;
+        /* 响应式 */
+        @media screen and (max-width: 768px) {
+            .input-container { flex-direction: column; gap: 10px; padding: 10px 15px; }
+            .input-area { width: 100%; }
+            .table-container { padding: 10px; }
+            table { font-size: 12px; }
+            th, td { padding: 8px 6px; font-size: 11px; }
         }
 
-        .confirm-modal-content {
-            background: white;
-            padding: 25px;
-            border-radius: 8px;
-            width: 90%;
-            max-width: 400px;
-            text-align: center;
-            box-shadow: 0 4px 20px rgba(0,0,0,0.3);
-        }
+        /* 滚动条优化 */
+        ::-webkit-scrollbar { width: 8px; height: 8px; }
+        ::-webkit-scrollbar-track { background: #f1f1f1; border-radius: 4px; }
+        ::-webkit-scrollbar-thumb { background: #c1c1c1; border-radius: 4px; }
+        ::-webkit-scrollbar-thumb:hover { background: #a8a8a8; }
 
-        .confirm-message {
-            margin: 15px 0;
-            font-size: 16px;
-            color: #333;
-        }
-
-        .confirm-buttons {
-            display: flex;
-            justify-content: center;
-            gap: 15px;
-            margin-top: 20px;
-        }
-
-        .confirm-btn {
-            padding: 10px 20px;
-            border: none;
-            border-radius: 4px;
-            cursor: pointer;
-            font-weight: 600;
-            font-size: 14px;
-            transition: background 0.2s;
-        }
-
-        .confirm-btn.confirm {
-            background: #e74c3c;
-            color: white;
-        }
-
-        .confirm-btn.confirm:hover {
-            background: #c0392b;
-        }
-
-        .confirm-btn.cancel {
-            background: #95a5a6;
-            color: white;
-        }
-
-        .confirm-btn.cancel:hover {
-            background: #7f8c8d;
-        }
-
-        #fundChartContainer {
-            position: relative;
-            height: 400px;
-            width: 100%;
-        }
-
-        .chart-loading {
-            display: flex;
-            justify-content: center;
-            align-items: center;
-            height: 100%;
-            font-size: 16px;
-            color: #666;
-        }
+        /* 触摸优化 */
+        button, .search-result-item { touch-action: manipulation; }
     </style>
 </head>
 <body>
@@ -366,6 +153,7 @@
     <!-- Toast 容器 -->
     <div id="localToastContainer"></div>
 
+    <script src="/static/js/common.js"></script>
     <script>
         let fundWatchlist = [];
         let isRefreshing = true;
@@ -992,33 +780,8 @@
             footerStatusDiv.className = `footer-status ${type}`;
         }
 
-        function showToast(message, type = 'info') {
-            console.log(`[${type}] ${message}`);
-            if (window.parent && window.parent.showToast) {
-                try {
-                    window.parent.showToast(message, type);
-                    return;
-                } catch (e) {}
-            }
-            // 本地回退
-            const containerId = 'localToastContainer';
-            let container = document.getElementById(containerId);
-            if (!container) {
-                container = document.createElement('div');
-                container.id = containerId;
-                container.style.cssText = `position: fixed; bottom: 20px; left: 50%; transform: translateX(-50%); z-index: 3000; display: flex; flex-direction: column; gap: 10px; width: 90%; max-width: 400px; pointer-events: none;`;
-                document.body.appendChild(container);
-            }
-            const toast = document.createElement('div');
-            let bgColor = '#3498db';
-            if (type === 'success') bgColor = '#27ae60';
-            if (type === 'error') bgColor = '#e74c3c';
-            if (type === 'warning') bgColor = '#f39c12';
-            toast.style.cssText = `padding: 12px 20px; border-radius: 8px; color: white; font-weight: bold; box-shadow: 0 2px 8px rgba(0,0,0,0.2); text-align: center; background-color: ${bgColor}; pointer-events: auto; box-sizing: border-box; animation: slideIn 0.3s ease-out, fadeOut 0.3s ease-in 2.7s forwards;`;
-            toast.textContent = message;
-            container.appendChild(toast);
-            setTimeout(() => { if (toast.parentNode) toast.parentNode.removeChild(toast); }, 3000);
-        }
+        // 使用 common.js 中的全局 showToast 函数
+        // 此函数现在从 /static/js/common.js 加载
 
         // 页面可见性控制变量
         let isPageVisible = true;
@@ -1048,54 +811,8 @@
             }
         }
 
-        // 自定义确认对话框
-        function showCustomConfirm(message, onConfirm, onCancel) {
-            // 创建遮罩层
-            const overlay = document.createElement('div');
-            overlay.className = 'confirm-modal';
-            overlay.id = 'customConfirmOverlay';
-
-            // 创建对话框内容
-            overlay.innerHTML = `
-                <div class="confirm-modal-content">
-                    <div class="confirm-message">${message}</div>
-                    <div class="confirm-buttons">
-                        <button class="confirm-btn confirm" onclick="handleConfirmAction(true)">确定</button>
-                        <button class="confirm-btn cancel" onclick="handleConfirmAction(false)">取消</button>
-                    </div>
-                </div>
-            `;
-
-            // 添加到页面
-            document.body.appendChild(overlay);
-
-            // 显示对话框
-            overlay.style.display = 'flex';
-
-            // 保存回调函数
-            window.currentConfirmCallback = {
-                onConfirm: onConfirm,
-                onCancel: onCancel || (() => {})
-            };
-        }
-
-        // 处理确认操作
-        function handleConfirmAction(confirmed) {
-            const overlay = document.getElementById('customConfirmOverlay');
-            if (overlay) {
-                overlay.remove();
-            }
-
-            if (window.currentConfirmCallback) {
-                if (confirmed && window.currentConfirmCallback.onConfirm) {
-                    window.currentConfirmCallback.onConfirm();
-                } else if (!confirmed && window.currentConfirmCallback.onCancel) {
-                    window.currentConfirmCallback.onCancel();
-                }
-                // 清除回调
-                delete window.currentConfirmCallback;
-            }
-        }
+        // 使用 common.js 中的全局 showCustomConfirm 函数
+        // 此函数现在从 /static/js/common.js 加载
 
         // 页面加载完成后执行初始化
         document.addEventListener('DOMContentLoaded', function() {

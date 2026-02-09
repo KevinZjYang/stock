@@ -4,201 +4,16 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>基金交易管理</title>
+    <link rel="stylesheet" href="/static/css/common.css">
     <style>
+        /* 基金交易页面特定样式 */
         body {
-            font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
             background: #f8f9fa;
             margin: 0;
             padding: 20px;
-            color: #333;
             height: 100%;
             overflow-y: auto;
         }
-
-        /* 统计卡片区域 - 重新设计 */
-        .summary-container {
-            display: grid;
-            grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
-            gap: 15px;
-            margin-bottom: 25px;
-        }
-
-        .summary-card {
-            background: white;
-            padding: 20px;
-            border-radius: 12px;
-            box-shadow: 0 4px 12px rgba(0,0,0,0.08);
-            border-left: 5px solid #3498db;
-            transition: transform 0.2s, box-shadow 0.2s;
-            display: flex;
-            flex-direction: column;
-            justify-content: space-between;
-        }
-
-        .summary-card:hover {
-            transform: translateY(-2px);
-            box-shadow: 0 6px 16px rgba(0,0,0,0.12);
-        }
-
-        /* 盈亏颜色定义 */
-        .summary-card.profit { border-left-color: #27ae60; }
-        .summary-card.loss { border-left-color: #e74c3c; }
-        .summary-card.info { border-left-color: #f39c12; }
-        .summary-card.primary { border-left-color: #3498db; }
-
-        /* --- 修改点：修复盈亏数值颜色显示问题 --- */
-        /* 
-           增加 .summary-card 前缀以提高 CSS 优先级，
-           确保覆盖 .summary-value 中定义的默认颜色 
-        */
-        .summary-card .profit-value { color: #27ae60 !important; }
-        .summary-card .loss-value { color: #e74c3c !important; }
-
-        .summary-title {
-            font-size: 13px;
-            color: #7f8c8d;
-            margin-bottom: 8px;
-            text-transform: uppercase;
-            letter-spacing: 0.5px;
-            font-weight: 600;
-        }
-
-        .summary-value {
-            font-size: 24px;
-            font-weight: 800;
-            color: #2c3e50;
-            margin-bottom: 4px;
-        }
-
-        .summary-sub {
-            font-size: 12px;
-            color: #95a5a6;
-            margin-top: 4px;
-        }
-
-        .summary-detail {
-            font-size: 11px;
-            color: #bdc3c7;
-            margin-top: 2px;
-        }
-
-        /* 操作按钮区域 */
-        .action-bar {
-            background: white;
-            padding: 15px 20px;
-            border-radius: 8px;
-            box-shadow: 0 2px 8px rgba(0,0,0,0.05);
-            margin-bottom: 25px;
-            display: flex;
-            gap: 10px;
-            align-items: center;
-            flex-wrap: wrap;
-        }
-
-        /* 统一按钮样式 */
-        .btn {
-            padding: 8px 16px;
-            border: none;
-            border-radius: 4px;
-            cursor: pointer;
-            font-size: 14px;
-            font-weight: 600;
-            transition: all 0.2s;
-            text-decoration: none;
-            display: inline-block;
-            text-align: center;
-            vertical-align: middle;
-            user-select: none;
-        }
-
-        .btn-sm {
-            padding: 6px 12px;
-            font-size: 12px;
-        }
-
-        .btn-lg {
-            padding: 12px 24px;
-            font-size: 16px;
-        }
-
-        .btn-primary {
-            background: #3498db;
-            color: white;
-        }
-
-        .btn-primary:hover {
-            background: #2980b9;
-        }
-
-        .btn-settings {
-            background: #95a5a6;
-            color: white;
-        }
-
-        .btn-settings:hover {
-            background: #7f8c8d;
-        }
-
-        .btn-success {
-            background: #27ae60;
-            color: white;
-        }
-
-        .btn-success:hover {
-            background: #219150;
-        }
-
-        .btn-danger {
-            background: #e74c3c;
-            color: white;
-        }
-
-        .btn-danger:hover {
-            background: #c0392b;
-        }
-
-        .btn-warning {
-            background: #f39c12;
-            color: white;
-        }
-
-        .btn-warning:hover {
-            background: #e67e22;
-        }
-
-        .btn:disabled {
-            opacity: 0.6;
-            cursor: not-allowed;
-        }
-
-        /* 表格区域 */
-        .table-container {
-            background: white;
-            border-radius: 8px;
-            box-shadow: 0 2px 8px rgba(0,0,0,0.05);
-            overflow: hidden;
-        }
-
-        table {
-            width: 100%;
-            border-collapse: collapse;
-            font-size: 13px;
-        }
-
-        thead {
-            background: #f8f9fa;
-            border-bottom: 2px solid #e0e0e0;
-        }
-
-        th, td {
-            padding: 12px 10px;
-            text-align: left;
-            border-bottom: 1px solid #eee;
-        }
-
-        th { font-weight: 600; color: #555; }
-
-        tbody tr:hover { background: #f1f5f9; }
 
         /* 收益对比表格样式 */
         #performancePanel table {
@@ -210,276 +25,30 @@
             color: #2c3e50;
         }
 
-        .type-buy { color: #e74c3c; font-weight: bold; }
-        .type-sell { color: #27ae60; font-weight: bold; }
-        .type-dividend { color: #f39c12; font-weight: bold; }
-
-        .actions-cell { white-space: nowrap; }
-
-        /* 模态框 */
-        .modal { display: none; position: fixed; top: 0; left: 0; width: 100%; height: 100%; background: rgba(0,0,0,0.5); z-index: 1000; justify-content: center; align-items: center; }
-        .modal-content { background: white; padding: 20px; border-radius: 8px; width: 90%; max-width: 500px; max-height: 90vh; overflow-y: auto; }
-        .modal-content h3 { margin-top: 0; }
-        .modal-buttons { display: flex; justify-content: flex-end; gap: 10px; margin-top: 15px; }
-        .modal-btn { padding: 8px 16px; border: none; border-radius: 4px; cursor: pointer; }
-        .modal-btn.cancel { background: #eee; }
-        .modal-btn.save { background: #3498db; color: white; }
-
-        /* 表单样式 (在模态框内) */
-        .form-grid {
-            display: grid;
-            grid-template-columns: repeat(auto-fit, minmax(150px, 1fr));
-            gap: 15px;
-            margin-bottom: 15px;
-        }
-
-        .form-group {
-            display: flex;
-            flex-direction: column;
-        }
-
-        .form-group label {
-            font-size: 12px;
-            color: #555;
-            margin-bottom: 5px;
-            font-weight: 600;
-        }
-
-        .form-group input, .form-group select {
-            padding: 8px 10px;
-            border: 1px solid #ddd;
-            border-radius: 4px;
-            font-size: 14px;
-            transition: border-color 0.2s;
-        }
-
-        .form-group input:focus, .form-group select:focus {
-            border-color: #3498db;
-            outline: none;
-        }
-
-        /* 基金代码查找区域 - 新增搜索功能 */
+        /* 基金代码查找区域 */
         .fund-lookup-container {
-            position: relative; /* 用于定位下拉列表 */
+            position: relative;
             display: flex;
             gap: 8px;
             align-items: flex-end;
         }
-        
-        .fund-name-display {
-            font-size: 14px;
-            color: #2c3e50;
-            font-weight: 600;
-            padding: 8px 0;
-            min-height: 30px;
-        }
-
-        /* 搜索结果下拉列表 */
-        .search-results {
-            position: absolute;
-            top: 100%;
-            left: 0;
-            right: 0;
-            background: white;
-            border: 1px solid #ccc;
-            border-top: none;
-            border-radius: 0 0 4px 4px;
-            max-height: 200px;
-            overflow-y: auto;
-            z-index: 1000;
-            display: none; /* 默认隐藏 */
-            box-shadow: 0 4px 6px rgba(0,0,0,0.1);
-        }
-
-        .search-result-item {
-            padding: 8px 12px;
-            cursor: pointer;
-            display: flex;
-            justify-content: space-between;
-            align-items: center;
-            border-bottom: 1px solid #f0f0f0;
-            font-size: 13px;
-        }
-
-        .search-result-item:hover {
-            background-color: #f5f5f5;
-        }
-
-        .result-code {
-            font-weight: bold;
-            color: #2c3e50;
-            min-width: 60px;
-        }
-
-        .result-name {
-            color: #555;
-            flex: 1;
-            text-align: left;
-            margin-left: 10px;
-        }
-
-        .result-type {
-            font-size: 10px;
-            padding: 2px 6px;
-            border-radius: 3px;
-            background: #eee;
-            color: #666;
-        }
 
         /* 响应式调整 */
         @media (max-width: 768px) {
-            .form-grid { grid-template-columns: 1fr; }
-            .summary-container { grid-template-columns: 1fr; }
-            table { display: block; overflow-x: auto; }
-            .action-bar { flex-direction: column; align-items: stretch; }
-            .action-bar .btn { width: 100%; }
-        }
-        
-        /* Loading 遮罩 */
-        #loadingOverlay {
-            display: none;
-            position: fixed;
-            top: 0; left: 0; width: 100%; height: 100%;
-            background: rgba(255,255,255,0.7);
-            z-index: 2000;
-            justify-content: center;
-            align-items: center;
-            font-size: 18px;
-            font-weight: bold;
-            color: #3498db;
-        }
-
-        /* 自定义确认对话框 */
-        .confirm-modal {
-            display: none;
-            position: fixed;
-            top: 0;
-            left: 0;
-            width: 100%;
-            height: 100%;
-            background: rgba(0,0,0,0.5);
-            z-index: 2000;
-            justify-content: center;
-            align-items: center;
-        }
-
-        .confirm-modal-content {
-            background: white;
-            padding: 25px;
-            border-radius: 8px;
-            width: 90%;
-            max-width: 400px;
-            text-align: center;
-            box-shadow: 0 4px 20px rgba(0,0,0,0.3);
-        }
-
-        .confirm-message {
-            margin: 15px 0;
-            font-size: 16px;
-            color: #333;
-        }
-
-        .confirm-buttons {
-            display: flex;
-            justify-content: center;
-            gap: 15px;
-            margin-top: 20px;
-        }
-
-        .confirm-btn {
-            padding: 10px 20px;
-            border: none;
-            border-radius: 4px;
-            cursor: pointer;
-            font-weight: 600;
-            font-size: 14px;
-            transition: background 0.2s;
-        }
-
-        .confirm-btn.confirm {
-            background: #e74c3c;
-            color: white;
-        }
-
-        .confirm-btn.confirm:hover {
-            background: #c0392b;
-        }
-
-        .confirm-btn.cancel {
-            background: #95a5a6;
-            color: white;
-        }
-
-        .confirm-btn.cancel:hover {
-            background: #7f8c8d;
-        }
-
-        /* ========== 标签页样式 ========== */
-        .tab-container {
-            margin-bottom: 20px;
-        }
-
-        .tab-nav {
-            display: flex;
-            gap: 5px;
-            border-bottom: 2px solid #e0e0e0;
-            margin-bottom: 20px;
-        }
-
-        .tab-item {
-            padding: 12px 24px;
-            cursor: pointer;
-            border: none;
-            background: none;
-            font-size: 14px;
-            font-weight: 600;
-            color: #7f8c8d;
-            border-bottom: 3px solid transparent;
-            margin-bottom: -2px;
-            transition: all 0.2s;
-        }
-
-        .tab-item:hover {
-            color: #3498db;
-            background: #f8f9fa;
-        }
-
-        .tab-item.active {
-            color: #3498db;
-            border-bottom-color: #3498db;
-        }
-
-        .tab-content {
-            display: none;
-        }
-
-        .tab-content.active {
-            display: block;
-            animation: fadeIn 0.2s ease;
-        }
-
-        @keyframes fadeIn {
-            from { opacity: 0; transform: translateY(5px); }
-            to { opacity: 1; transform: translateY(0); }
-        }
-
-        /* ========== 汇总页面增强样式 ========== */
-        .summary-enhanced {
-            background: white;
-            border-radius: 12px;
-            padding: 20px;
-            margin-bottom: 20px;
-            box-shadow: 0 2px 8px rgba(0,0,0,0.05);
-        }
-
-        .summary-enhanced h3 {
-            margin: 0 0 15px 0;
-            color: #2c3e50;
-            font-size: 15px;
-            font-weight: 600;
-            display: flex;
-            align-items: center;
-            gap: 8px;
+            .summary-container {
+                grid-template-columns: 1fr;
+            }
+            table {
+                display: block;
+                overflow-x: auto;
+            }
+            .action-bar {
+                flex-direction: column;
+                align-items: stretch;
+            }
+            .action-bar .btn {
+                width: 100%;
+            }
         }
 
         /* Top 排行样式 */
@@ -556,14 +125,12 @@
             background: #e8f4fc;
             border-radius: 6px;
             overflow: hidden;
-            position: relative;
         }
 
         .progress-bar {
             height: 100%;
             border-radius: 6px;
             transition: width 0.5s ease;
-            position: relative;
         }
 
         .progress-bar.positive { background: linear-gradient(90deg, #27ae60, #2ecc71); }
@@ -623,19 +190,23 @@
             color: #555;
         }
 
-        /* ========== 标签页内容区域 ========== */
-        .tab-panel {
+        /* 汇总增强面板 */
+        .summary-enhanced {
             background: white;
-            border-radius: 8px;
+            border-radius: 12px;
             padding: 20px;
-            box-shadow: 0 2px 8px rgba(0,0,0,0.05);
             margin-bottom: 20px;
+            box-shadow: 0 2px 8px rgba(0,0,0,0.05);
         }
 
-        .tab-panel h3 {
+        .summary-enhanced h3 {
             margin: 0 0 15px 0;
             color: #2c3e50;
-            font-size: 16px;
+            font-size: 15px;
+            font-weight: 600;
+            display: flex;
+            align-items: center;
+            gap: 8px;
         }
     </style>
 </head>
@@ -1563,14 +1134,20 @@
             });
         }
 
-        // --- Toast 提示 ---
+        // --- Toast 提示 (使用 common.js 的实现，但支持父窗口) ---
         function showToast(message, type = 'info') {
             console.log(`[${type}] ${message}`);
-            if (window.parent && window.parent.showToast) {
+            // 尝试调用父窗口的 Toast（如果在 iframe 中）
+            if (window.parent && window.parent !== window) {
                 try {
                     window.parent.showToast(message, type);
                     return;
                 } catch (e) {}
+            }
+            // 使用 common.js 的实现
+            if (typeof window.showToast === 'function' && window !== window.parent) {
+                window.showToast(message, type);
+                return;
             }
             // 本地回退
             const containerId = 'localToastContainer';
@@ -1590,55 +1167,6 @@
             toast.textContent = message;
             container.appendChild(toast);
             setTimeout(() => { if (toast.parentNode) toast.parentNode.removeChild(toast); }, 3000);
-        }
-
-        // 自定义确认对话框
-        function showCustomConfirm(message, onConfirm, onCancel) {
-            // 创建遮罩层
-            const overlay = document.createElement('div');
-            overlay.className = 'confirm-modal';
-            overlay.id = 'customConfirmOverlay';
-
-            // 创建对话框内容
-            overlay.innerHTML = `
-                <div class="confirm-modal-content">
-                    <div class="confirm-message">${message}</div>
-                    <div class="confirm-buttons">
-                        <button class="confirm-btn confirm" onclick="handleConfirmAction(true)">确定</button>
-                        <button class="confirm-btn cancel" onclick="handleConfirmAction(false)">取消</button>
-                    </div>
-                </div>
-            `;
-
-            // 添加到页面
-            document.body.appendChild(overlay);
-
-            // 显示对话框
-            overlay.style.display = 'flex';
-
-            // 保存回调函数
-            window.currentConfirmCallback = {
-                onConfirm: onConfirm,
-                onCancel: onCancel || (() => {})
-            };
-        }
-
-        // 处理确认操作
-        function handleConfirmAction(confirmed) {
-            const overlay = document.getElementById('customConfirmOverlay');
-            if (overlay) {
-                overlay.remove();
-            }
-
-            if (window.currentConfirmCallback) {
-                if (confirmed && window.currentConfirmCallback.onConfirm) {
-                    window.currentConfirmCallback.onConfirm();
-                } else if (!confirmed && window.currentConfirmCallback.onCancel) {
-                    window.currentConfirmCallback.onCancel();
-                }
-                // 清除回调
-                delete window.currentConfirmCallback;
-            }
         }
 
         // 页面加载完成后执行初始化
@@ -1664,5 +1192,7 @@
             });
         });
     </script>
+    <!-- 公共 JS -->
+    <script src="/static/js/common.js"></script>
 </body>
 </html>

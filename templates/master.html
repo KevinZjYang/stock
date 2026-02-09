@@ -4,7 +4,9 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>股票基金监控系统 - Master-Detail</title>
+    <link rel="stylesheet" href="/static/css/common.css">
     <style>
+        /* Master页面特有的样式（不与common.css重复的） */
         * { margin: 0; padding: 0; box-sizing: border-box; }
         body {
             font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
@@ -485,6 +487,7 @@
     </div>
 
     <script>
+        const STORAGE_KEY = 'stock_monitor_current_view';
         let currentView = 'stock';
         let isGlobalPaused = false;
         let logRefreshInterval = null; // 新增：日志刷新定时器
@@ -492,16 +495,26 @@
         document.addEventListener('DOMContentLoaded', function() {
             updateTime();
             setInterval(updateTime, 1000);
+
+            // 从 localStorage 恢复上次保存的页面状态
+            const savedView = localStorage.getItem(STORAGE_KEY);
+            if (savedView && ['stock', 'fund', 'fund_trans', 'notification', 'update'].includes(savedView)) {
+                currentView = savedView;
+            }
+            switchView(currentView, false); // 恢复视图，不显示加载动画
         });
 
-        function switchView(view) {
+        function switchView(view, showLoad = true) {
             if (currentView === view) return;
-            showLoading();
-            
+            if (showLoad) showLoading();
+
+            // 保存当前页面状态到 localStorage
+            localStorage.setItem(STORAGE_KEY, view);
+
             document.querySelectorAll('.nav-item').forEach(item => item.classList.remove('active'));
             const activeItem = document.querySelector(`.nav-item[onclick="switchView('${view}')"]`);
             if (activeItem) activeItem.classList.add('active');
-            
+
             const titleMap = {
                 'stock': '股票监控',
                 'fund': '基金查询',
@@ -519,7 +532,7 @@
                     targetWrapper.classList.add('active');
                 }
                 currentView = view;
-                hideLoading();
+                if (showLoad) hideLoading();
             }, 300);
         }
 
@@ -780,5 +793,7 @@
             });
         }
     </script>
+    <!-- 公共 JS -->
+    <script src="/static/js/common.js"></script>
 </body>
 </html>

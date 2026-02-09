@@ -4,570 +4,90 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>股票监控</title>
+    <link rel="stylesheet" href="/static/css/common.css">
     <style>
+        /* 股票页面特定样式 - 保留必要样式，使用公共CSS */
         body { font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif; background: #f8f9fa; margin: 0; padding: 0; color: #333; }
-        
+
         /* 输入区域容器 */
-        .input-container {
-            position: relative; /* 用于定位下拉列表 */
-            background: white; 
-            padding: 15px 20px; 
-            border-bottom: 1px solid #e0e0e0;
-            display: flex; 
-            gap: 10px; 
-            align-items: center; 
-            flex-wrap: wrap;
-        }
-        
-        .input-area {
-            display: flex;
-            gap: 10px;
-            flex: 1;
-            min-width: 300px;
-            position: relative; /* 用于定位下拉列表 */
-        }
-
-        .input-area input {
-            padding: 8px 12px; 
-            border: 1px solid #ccc; 
-            border-radius: 4px; 
-            flex: 1; 
-            min-width: 120px;
-            font-size: 14px;
-        }
-        
-        .input-area input:focus {
-            border-color: #3498db;
-            outline: none;
-        }
-
-        /* 统一按钮样式 */
-        .btn {
-            padding: 8px 16px;
-            border: none;
-            border-radius: 4px;
-            cursor: pointer;
-            font-size: 14px;
-            font-weight: 600;
-            transition: all 0.2s;
-            text-decoration: none;
-            display: inline-block;
-            text-align: center;
-            vertical-align: middle;
-            user-select: none;
-        }
-
-        .btn-sm {
-            padding: 6px 12px;
-            font-size: 12px;
-        }
-
-        .btn-lg {
-            padding: 12px 24px;
-            font-size: 16px;
-        }
-
-        .btn-primary {
-            background: #3498db;
-            color: white;
-        }
-
-        .btn-primary:hover {
-            background: #2980b9;
-        }
-
-        .btn-settings {
-            background: #95a5a6;
-            color: white;
-        }
-
-        .btn-settings:hover {
-            background: #7f8c8d;
-        }
-
-        .btn-success {
-            background: #27ae60;
-            color: white;
-        }
-
-        .btn-success:hover {
-            background: #219150;
-        }
-
-        .btn-danger {
-            background: #e74c3c;
-            color: white;
-        }
-
-        .btn-danger:hover {
-            background: #c0392b;
-        }
-
-        .btn-warning {
-            background: #f39c12;
-            color: white;
-        }
-
-        .btn-warning:hover {
-            background: #e67e22;
-        }
-
-        .btn:disabled {
-            opacity: 0.6;
-            cursor: not-allowed;
-        }
+        .input-container { position: relative; background: white; padding: 15px 20px; border-bottom: 1px solid #e0e0e0; display: flex; gap: 10px; align-items: center; flex-wrap: wrap; }
+        .input-area { display: flex; gap: 10px; flex: 1; min-width: 300px; position: relative; }
 
         /* 搜索结果下拉列表 */
-        .search-results {
-            position: absolute;
-            top: 100%;
-            left: 0;
-            right: 0;
-            background: white;
-            border: 1px solid #ccc;
-            border-top: none;
-            border-radius: 0 0 4px 4px;
-            max-height: 300px;
-            overflow-y: auto;
-            z-index: 1000;
-            display: none; /* 默认隐藏 */
-            box-shadow: 0 4px 6px rgba(0,0,0,0.1);
-        }
-
-        .search-result-item {
-            padding: 8px 12px;
-            cursor: pointer;
-            display: flex;
-            justify-content: space-between;
-            align-items: center;
-            border-bottom: 1px solid #f0f0f0;
-            font-size: 13px;
-        }
-
-        .search-result-item:hover {
-            background-color: #f5f5f5;
-        }
-
-        .result-code {
-            font-weight: bold;
-            color: #2c3e50;
-            min-width: 60px;
-        }
-
-        .result-name {
-            color: #555;
-            flex: 1;
-            text-align: left;
-            margin-left: 10px;
-        }
-
-        .result-type {
-            font-size: 10px;
-            padding: 2px 6px;
-            border-radius: 3px;
-            background: #eee;
-            color: #666;
-        }
-
+        .search-results { position: absolute; top: 100%; left: 0; right: 0; background: white; border: 1px solid #ccc; border-top: none; border-radius: 0 0 4px 4px; max-height: 300px; overflow-y: auto; z-index: 1000; display: none; box-shadow: 0 4px 6px rgba(0,0,0,0.1); }
+        .search-result-item { padding: 8px 12px; cursor: pointer; display: flex; justify-content: space-between; align-items: center; border-bottom: 1px solid #f0f0f0; font-size: 13px; }
+        .search-result-item:hover { background-color: #f5f5f5; }
+        .result-code { font-weight: bold; color: #2c3e50; min-width: 60px; }
+        .result-name { color: #555; flex: 1; text-align: left; margin-left: 10px; }
+        .result-type { font-size: 10px; padding: 2px 6px; border-radius: 3px; background: #eee; color: #666; }
         .result-type.index { background: #e3f2fd; color: #1565c0; }
-        .result-type.sh_stock { background: #e3f2fd; color: #1565c0; } /* SH */
-        .result-type.sz_stock { background: #e8f5e9; color: #2e7d32; } /* SZ */
-        .result-type.hk_stock { background: #fff3e0; color: #ef6c00; } /* HK */
-        .result-type.us_stock { background: #fce4ec; color: #c2185b; } /* US */
+        .result-type.sh_stock { background: #e3f2fd; color: #1565c0; }
+        .result-type.sz_stock { background: #e8f5e9; color: #2e7d32; }
+        .result-type.hk_stock { background: #fff3e0; color: #ef6c00; }
+        .result-type.us_stock { background: #fce4ec; color: #c2185b; }
 
         /* 指数卡片 */
-        .index-container { display: flex; gap: 15px; padding: 10px 20px; background: white; border-bottom: 1px solid #e0e0e0; }
-        .index-card { flex: 1; padding: 10px; border-radius: 6px; background: #f8f9fa; border: 1px solid #e0e0e0; }
+        .index-container { display: flex; gap: 15px; padding: 10px 20px; background: white; border-bottom: 1px solid #e0e0e0; overflow-x: auto; }
+        .index-card { flex: 1; min-width: 150px; padding: 10px; border-radius: 6px; background: #f8f9fa; border: 1px solid #e0e0e0; }
         .index-card h4 { margin: 0 0 5px 0; font-size: 14px; color: #555; }
         .index-value { font-size: 18px; font-weight: bold; }
         .index-change { font-size: 14px; margin-top: 2px; }
-        
+
         /* 表格 */
         .table-container { padding: 20px; overflow-x: auto; }
         table { width: 100%; border-collapse: collapse; background: white; box-shadow: 0 1px 3px rgba(0,0,0,0.1); }
         th, td { padding: 12px; text-align: left; border-bottom: 1px solid #eee; font-size: 13px; white-space: nowrap; }
         th { background: #f8f9fa; font-weight: 600; color: #555; }
         tr:hover { background: #f1f1f1; }
-        
-        /* 状态颜色 */
-        .positive { color: #e74c3c; font-weight: bold; } /* 涨为红 */
-        .negative { color: #27ae60; font-weight: bold; } /* 跌为绿 */
+
+        /* 状态颜色 - 涨红跌绿 */
+        .positive { color: #e74c3c; font-weight: bold; }
+        .negative { color: #27ae60; font-weight: bold; }
         .neutral { color: #7f8c8d; }
-        
+
+        /* 类型标签 */
         .type-badge { padding: 2px 6px; border-radius: 4px; font-size: 11px; font-weight: bold; }
-        .type-11 { background: #e3f2fd; color: #1565c0; } /* A股 */
-        .type-12 { background: #e8f5e9; color: #2e7d32; } /* B股 */
-        .type-13 { background: #fff3e0; color: #ef6c00; } /* 港股 */
-        .type-14 { background: #fce4ec; color: #c2185b; } /* 可转债 */
-        .type-15 { background: #e8f5e9; color: #2e7d32; } /* 基金 */
-        .type-16 { background: #fff3e0; color: #ef6c00; } /* 美股 */
-        .type-20 { background: #e3f2fd; color: #1565c0; } /* 指数 */
-        .type-SH { background: #e3f2fd; color: #1565c0; } /* 上海 */
-        .type-SZ { background: #e8f5e9; color: #2e7d32; } /* 深圳 */
-        .type-HK { background: #fff3e0; color: #ef6c00; } /* 港股 */
-        .type-US { background: #fce4ec; color: #c2185b; } /* 美股 */
-        .type-指数 { background: #e3f2fd; color: #1565c0; } /* 指数 */
-        .type-unknown { background: #eee; color: #666; }
-        
+        .type-badge.type-11 { background: #e3f2fd; color: #1565c0; }
+        .type-badge.type-12 { background: #e8f5e9; color: #2e7d32; }
+        .type-badge.type-13 { background: #fff3e0; color: #ef6c00; }
+        .type-badge.type-14 { background: #fce4ec; color: #c2185b; }
+        .type-badge.type-15 { background: #e8f5e9; color: #2e7d32; }
+        .type-badge.type-16 { background: #fff3e0; color: #ef6c00; }
+        .type-badge.type-20 { background: #e3f2fd; color: #1565c0; }
+        .type-badge.SH { background: #e3f2fd; color: #1565c0; }
+        .type-badge.SZ { background: #e8f5e9; color: #2e7d32; }
+        .type-badge.HK { background: #fff3e0; color: #ef6c00; }
+        .type-badge.US { background: #fce4ec; color: #c2185b; }
+        .type-badge.index { background: #e3f2fd; color: #1565c0; }
+
         .currency-badge { background: #eee; padding: 2px 6px; border-radius: 4px; font-size: 11px; }
 
         /* 底部状态 */
         .footer-status { padding: 8px 20px; font-size: 12px; color: #666; background: white; border-top: 1px solid #e0e0e0; }
         .footer-status.error { color: #e74c3c; }
         .footer-status.paused { color: #f39c12; }
+        .footer-status.refreshing { color: #3498db; }
+        .footer-status.closed { color: #7f8c8d; }
 
-        /* 模态框基础样式 */
-        .modal {
-            display: none;
-            position: fixed;
-            top: 0;
-            left: 0;
-            width: 100%;
-            height: 100%;
-            background: rgba(0,0,0,0.5);
-            z-index: 1000;
-            justify-content: center;
-            align-items: center;
-            /* 确保模态框居中显示 */
-            align-items: flex-start;
-            padding-top: 60px;
-        }
-
-        /* 模态框内容容器 */
-        .modal-content {
-            background: white;
-            padding: 20px;
-            border-radius: 8px;
-            width: 90%;
-            max-width: 400px;
-            box-shadow: 0 4px 20px rgba(0,0,0,0.3);
-            /* 确保内容不会超出屏幕 */
-            max-height: calc(100vh - 100px);
-            overflow-y: auto;
-        }
-
-        /* 监控模态框特殊样式 */
-        #monitorModal .modal-content {
-            max-width: 500px;
-            width: 90%;
-            max-height: 90vh;
-            overflow: auto;
-        }
-
-        .modal-content.large {
-            max-width: 800px;
-            width: 90%;
-            max-height: 80vh;
-            overflow: auto;
-        }
-
-        .modal-content h3 {
-            margin-top: 0;
-            margin-bottom: 15px;
-            color: #2c3e50;
-        }
-
-        .modal-content input {
-            width: 100%;
-            padding: 8px 10px;
-            margin: 10px 0;
-            border: 1px solid #ddd;
-            border-radius: 4px;
-            font-size: 14px;
-            box-sizing: border-box;
-        }
-
-        .modal-content select {
-            width: 100%;
-            padding: 8px 10px;
-            margin: 10px 0;
-            border: 1px solid #ddd;
-            border-radius: 4px;
-            font-size: 14px;
-            box-sizing: border-box;
-        }
-
-        .modal-buttons {
-            display: flex;
-            justify-content: flex-end;
-            gap: 10px;
-            margin-top: 20px;
-        }
-
-        /* 特定于监控对话框的按钮样式 */
-        #monitorModal .modal-buttons {
-            margin-top: 20px;
-            justify-content: flex-end;
-        }
-
-        .modal-btn {
-            padding: 8px 16px;
-            border: none;
-            border-radius: 4px;
-            cursor: pointer;
-        }
-
-        .modal-btn.cancel {
-            background: #95a5a6;
-            color: white;
-        }
-
-        .modal-btn.save {
-            background: #3498db;
-            color: white;
-        }
-
-        /* 表单网格布局 */
-        .form-grid {
-            display: grid;
-            grid-template-columns: repeat(auto-fit, minmax(150px, 1fr));
-            gap: 15px;
-            margin-bottom: 15px;
-        }
-
-        .form-group {
-            display: flex;
-            flex-direction: column;
-        }
-
-        .form-group label {
-            font-size: 12px;
-            color: #555;
-            margin-bottom: 5px;
-            font-weight: 600;
-        }
-
-        .form-group input, .form-group select {
-            padding: 8px 10px;
-            border: 1px solid #ddd;
-            border-radius: 4px;
-            font-size: 14px;
-            transition: border-color 0.2s;
-        }
-
-        .form-group input:focus, .form-group select:focus {
-            border-color: #3498db;
-            outline: none;
-        }
-
-        /* Toast */
-        #localToastContainer { position: fixed; bottom: 20px; left: 50%; transform: translateX(-50%); z-index: 3000; display: flex; flex-direction: column; gap: 10px; width: 90%; max-width: 400px; pointer-events: none; }
-
-        /* 响应式设计 */
+        /* 响应式 */
         @media screen and (max-width: 768px) {
-            .input-container {
-                flex-direction: column;
-                gap: 10px;
-                padding: 10px 15px;
-            }
-
-            .input-area {
-                width: 100%;
-            }
-
-            .index-container {
-                flex-direction: column;
-                gap: 10px;
-                padding: 10px 15px;
-            }
-
-            .index-card {
-                width: 100%;
-            }
-
-            .table-container {
-                padding: 10px;
-            }
-
-            table {
-                font-size: 12px;
-            }
-
-            th, td {
-                padding: 8px 6px;
-                font-size: 11px;
-            }
-
-            .footer-status {
-                padding: 6px 10px;
-                font-size: 11px;
-            }
-
-            .modal-content {
-                width: 95%;
-                margin: 20px auto;
-                max-width: 95%;
-                min-width: 90%;
-            }
-
-            .search-results {
-                max-height: 200px;
-            }
-
-            /* 移动设备上模态框的特殊处理 */
-            .modal {
-                padding-top: 20px;
-            }
-
-            #monitorModal .modal-content {
-                max-width: 95%;
-                width: 95%;
-                margin: 10px auto;
-            }
+            .input-container { flex-direction: column; gap: 10px; padding: 10px 15px; }
+            .input-area { width: 100%; }
+            .index-container { flex-direction: column; gap: 10px; padding: 10px 15px; }
+            .index-card { width: 100%; }
+            .table-container { padding: 10px; }
+            table { font-size: 12px; }
+            th, td { padding: 8px 6px; font-size: 11px; }
         }
 
-        @media screen and (max-width: 480px) {
-            .input-container {
-                padding: 8px 10px;
-            }
+        /* 滚动条优化 */
+        ::-webkit-scrollbar { width: 8px; height: 8px; }
+        ::-webkit-scrollbar-track { background: #f1f1f1; border-radius: 4px; }
+        ::-webkit-scrollbar-thumb { background: #c1c1c1; border-radius: 4px; }
+        ::-webkit-scrollbar-thumb:hover { background: #a8a8a8; }
 
-            .input-area input {
-                min-width: 0;
-            }
-
-            .index-container {
-                padding: 8px 10px;
-            }
-
-            table {
-                font-size: 11px;
-            }
-
-            th, td {
-                padding: 6px 4px;
-                font-size: 10px;
-            }
-
-            .type-badge, .currency-badge {
-                font-size: 9px;
-                padding: 1px 4px;
-            }
-
-            .footer-status {
-                font-size: 10px;
-                padding: 5px 8px;
-            }
-
-            /* 小屏幕设备上模态框的特殊处理 */
-            .modal-content {
-                width: 95%;
-                margin: 10px auto;
-                padding: 15px;
-            }
-
-            #monitorModal .modal-content {
-                max-width: 95%;
-                width: 95%;
-                margin: 10px auto;
-                padding: 15px;
-            }
-        }
-
-        /* 优化移动端触摸体验 */
-        button, .search-result-item {
-            touch-action: manipulation;
-        }
-
-        /* 优化滚动条外观 */
-        ::-webkit-scrollbar {
-            width: 8px;
-            height: 8px;
-        }
-
-        ::-webkit-scrollbar-track {
-            background: #f1f1f1;
-            border-radius: 4px;
-        }
-
-        ::-webkit-scrollbar-thumb {
-            background: #c1c1c1;
-            border-radius: 4px;
-        }
-
-        ::-webkit-scrollbar-thumb:hover {
-            background: #a8a8a8;
-        }
-
-        /* 自定义确认对话框 */
-        .confirm-modal {
-            display: none;
-            position: fixed;
-            top: 0;
-            left: 0;
-            width: 100%;
-            height: 100%;
-            background: rgba(0,0,0,0.5);
-            z-index: 2000;
-            justify-content: center;
-            align-items: center;
-        }
-
-        .confirm-modal-content {
-            background: white;
-            padding: 25px;
-            border-radius: 8px;
-            width: 90%;
-            max-width: 400px;
-            text-align: center;
-            box-shadow: 0 4px 20px rgba(0,0,0,0.3);
-        }
-
-        .confirm-message {
-            margin: 15px 0;
-            font-size: 16px;
-            color: #333;
-        }
-
-        .confirm-buttons {
-            display: flex;
-            justify-content: center;
-            gap: 15px;
-            margin-top: 20px;
-        }
-
-        .confirm-btn {
-            padding: 10px 20px;
-            border: none;
-            border-radius: 4px;
-            cursor: pointer;
-            font-weight: 600;
-            font-size: 14px;
-            transition: background 0.2s;
-        }
-
-        .confirm-btn.confirm {
-            background: #e74c3c;
-            color: white;
-        }
-
-        .confirm-btn.confirm:hover {
-            background: #c0392b;
-        }
-
-        .confirm-btn.cancel {
-            background: #95a5a6;
-            color: white;
-        }
-
-        .confirm-btn.cancel:hover {
-            background: #7f8c8d;
-        }
-
-        /* 监控按钮样式 */
-        .btn-monitor {
-            background: #f39c12;
-            color: white;
-            border: none;
-            padding: 4px 8px;
-            border-radius: 4px;
-            cursor: pointer;
-            font-size: 12px;
-            margin-right: 5px;
-        }
-
-        .btn-monitor:hover {
-            background: #e67e22;
-        }
+        /* 触摸优化 */
+        button, .search-result-item { touch-action: manipulation; }
     </style>
 </head>
 <body>
@@ -631,6 +151,7 @@
     <!-- Toast 容器 -->
     <div id="localToastContainer"></div>
 
+    <script src="/static/js/common.js"></script>
     <script>
         let watchlist = [];
         let isRefreshing = true;
@@ -1332,33 +853,8 @@
             footerStatusDiv.className = `footer-status ${type}`;
         }
 
-        function showToast(message, type = 'info') {
-            console.log(`[${type}] ${message}`);
-            if (window.parent && window.parent.showToast) {
-                try {
-                    window.parent.showToast(message, type);
-                    return;
-                } catch (e) {}
-            }
-            // 本地回退
-            const containerId = 'localToastContainer';
-            let container = document.getElementById(containerId);
-            if (!container) {
-                container = document.createElement('div');
-                container.id = containerId;
-                container.style.cssText = `position: fixed; bottom: 20px; left: 50%; transform: translateX(-50%); z-index: 3000; display: flex; flex-direction: column; gap: 10px; width: 90%; max-width: 400px; pointer-events: none;`;
-                document.body.appendChild(container);
-            }
-            const toast = document.createElement('div');
-            let bgColor = '#3498db';
-            if (type === 'success') bgColor = '#27ae60';
-            if (type === 'error') bgColor = '#e74c3c';
-            if (type === 'warning') bgColor = '#f39c12';
-            toast.style.cssText = `padding: 12px 20px; border-radius: 8px; color: white; font-weight: bold; box-shadow: 0 2px 8px rgba(0,0,0,0.2); text-align: center; background-color: ${bgColor}; pointer-events: auto; box-sizing: border-box; animation: slideIn 0.3s ease-out, fadeOut 0.3s ease-in 2.7s forwards;`;
-            toast.textContent = message;
-            container.appendChild(toast);
-            setTimeout(() => { if (toast.parentNode) toast.parentNode.removeChild(toast); }, 3000);
-        }
+        // 使用 common.js 中的全局 showToast 函数
+        // 此函数现在从 /static/js/common.js 加载
 
         // 批量获取股票数据
         async function fetchBatchStockData(codes) {
@@ -1564,54 +1060,8 @@
             }
         }
 
-        // 自定义确认对话框
-        function showCustomConfirm(message, onConfirm, onCancel) {
-            // 创建遮罩层
-            const overlay = document.createElement('div');
-            overlay.className = 'confirm-modal';
-            overlay.id = 'customConfirmOverlay';
-
-            // 创建对话框内容
-            overlay.innerHTML = `
-                <div class="confirm-modal-content">
-                    <div class="confirm-message">${message}</div>
-                    <div class="confirm-buttons">
-                        <button class="confirm-btn confirm" onclick="handleConfirmAction(true)">确定</button>
-                        <button class="confirm-btn cancel" onclick="handleConfirmAction(false)">取消</button>
-                    </div>
-                </div>
-            `;
-
-            // 添加到页面
-            document.body.appendChild(overlay);
-
-            // 显示对话框
-            overlay.style.display = 'flex';
-
-            // 保存回调函数
-            window.currentConfirmCallback = {
-                onConfirm: onConfirm,
-                onCancel: onCancel || (() => {})
-            };
-        }
-
-        // 处理确认操作
-        function handleConfirmAction(confirmed) {
-            const overlay = document.getElementById('customConfirmOverlay');
-            if (overlay) {
-                overlay.remove();
-            }
-
-            if (window.currentConfirmCallback) {
-                if (confirmed && window.currentConfirmCallback.onConfirm) {
-                    window.currentConfirmCallback.onConfirm();
-                } else if (!confirmed && window.currentConfirmCallback.onCancel) {
-                    window.currentConfirmCallback.onCancel();
-                }
-                // 清除回调
-                delete window.currentConfirmCallback;
-            }
-        }
+        // 使用 common.js 中的全局 showCustomConfirm 函数
+        // 此函数现在从 /static/js/common.js 加载
 
         // 当前打开的模态框跟踪
         let currentOpenModal = null;
