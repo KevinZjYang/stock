@@ -25,6 +25,30 @@ def calculate_fund_summary(transactions):
             "market_value": 0  # 添加市值字段
         }
 
+    # 按日期升序排序，确保先处理的买入/分红在卖出之前
+    # 如果日期为空或无效，放在最后处理
+    def get_sort_key(t):
+        date_str = t.get('date', '')
+        if not date_str:
+            return float('inf')
+        try:
+            # 处理 YYYY/MM/DD HH:MM:SS 或 YYYY-MM-DD 格式
+            # 先去掉时间部分，只保留日期
+            date_str = date_str.split(' ')[0]  # 取日期部分
+            date_str = date_str.replace('-', '/')
+            parts = date_str.split('/')
+            if len(parts) == 3:
+                year, month, day = parts
+                return int(year) * 10000 + int(month) * 100 + int(day)
+        except:
+            pass
+        return float('inf')
+
+    sorted_transactions = sorted(transactions, key=get_sort_key)
+
+    # 调试日志：显示排序后的交易顺序
+    app_logger.info(f"[市值计算] 排序后交易记录: {[(t.get('date'), t.get('type'), t.get('code')) for t in sorted_transactions]}")
+
     holdings = {}
     realized_profit = 0
     dividend_total = 0
@@ -33,7 +57,7 @@ def calculate_fund_summary(transactions):
     dividend_count = 0
     total_fee = 0
 
-    for t in transactions:
+    for t in sorted_transactions:
         code = t.get('code')
         # 确保基金代码是6位格式，不足的前面补0
         formatted_code = str(code).zfill(6)
@@ -56,7 +80,11 @@ def calculate_fund_summary(transactions):
 
         elif t_type == '卖出':
             sell_count += 1
-            if formatted_code in holdings and holdings[formatted_code]['shares'] > 0:
+            # 确保持仓记录存在，如果不存在则初始化为0
+            if formatted_code not in holdings:
+                holdings[formatted_code] = {'shares': 0, 'cost': 0}
+
+            if holdings[formatted_code]['shares'] > 0:
                 # 计算平均成本单价
                 avg_cost_per_share = holdings[formatted_code]['cost'] / holdings[formatted_code]['shares']
 
@@ -75,30 +103,51 @@ def calculate_fund_summary(transactions):
 
                 if holdings[formatted_code]['shares'] <= 0.0001:
                     del holdings[formatted_code]
+            elif holdings[formatted_code]['shares'] < 0:
+                # 份额已经为负数，说明卖出超过持仓，这种异常情况需要特殊处理
+                # 只计算已实现盈亏，不修改持仓数据
+                avg_cost_per_share = abs(holdings[formatted_code]['cost'] / holdings[formatted_code]['shares'])
+                sell_cost = shares * avg_cost_per_share
+                sell_income = abs(amount) - fee
+                realized_profit += (sell_income - sell_cost)
 
         elif t_type == '分红':
             dividend_count += 1
             dividend_total += abs(amount)
-            # 分红属于已实现收益，增加到已实现盈亏中，但不影响持仓成本
-            realized_profit += abs(amount)
+            # 分红处理：判断是现金分红还是分红再投资
+            # 如果 shares > 0 且 actual_amount > 0，视为分红再投资
+            if shares > 0:
+                # 分红再投资：增加持仓份额和成本
+                if formatted_code not in holdings:
+                    holdings[formatted_code] = {'shares': 0, 'cost': 0}
+                holdings[formatted_code]['shares'] += shares
+                holdings[formatted_code]['cost'] += abs(amount)
+            else:
+                # 现金分红：计入已实现盈亏，不影响持仓成本
+                realized_profit += abs(amount)
 
     total_shares = sum(h['shares'] for h in holdings.values())
     # 持仓成本总额 = 所有持仓基金的成本之和
     total_cost = sum(h['cost'] for h in holdings.values())
     total_cost = abs(total_cost)
 
+    app_logger.info(f"[市值计算] 当前持仓: {holdings}")
+
     # 计算持仓市值：获取持有基金的实时净值并计算总市值
     market_value = 0
     if holdings:
         # 获取所有持有基金的代码（已经是6位格式）
         holding_codes = list(holdings.keys())
+        app_logger.info(f"[市值计算] 持有基金代码: {holding_codes}")
         if holding_codes:
             # 获取基金的实时净值（holding_codes已经是6位格式）
             fund_prices = fetch_fund_price_batch_sync(holding_codes)
+            app_logger.info(f"[市值计算] API返回基金数量: {len(fund_prices)}")
             if fund_prices:
                 # 根据每只基金的持有份额和当前净值计算市值
                 for fund_data in fund_prices:
                     code = fund_data.get('code')
+                    app_logger.info(f"[市值计算] 尝试匹配基金代码: {code}")
                     # 由于holdings中的键已经是6位格式，直接匹配即可
                     if code in holdings:
                         # 使用估算净值(expectWorth)或单位净值(netWorth)，优先使用估算净值
@@ -106,11 +155,12 @@ def calculate_fund_summary(transactions):
                         if current_net_worth:
                             holding_shares = holdings[code]['shares']
                             fund_market_value = holding_shares * current_net_worth
+                            app_logger.info(f"[市值计算] {code}: 份额={holding_shares}, 净值={current_net_worth}, 市值={fund_market_value}")
                             market_value += fund_market_value
                         else:
                             app_logger.warning(f"未能获取基金 {code} 的净值数据，跳过市值计算")
                     else:
-                        app_logger.warning(f"返回的基金代码 {code} 在持仓中找不到匹配项，持仓代码: {holding_codes}")
+                        app_logger.warning(f"返回的基金代码 '{code}' 在持仓中找不到匹配项，持仓代码: {holding_codes}")
             else:
                 app_logger.warning(f"未能获取基金净值数据，持有基金数量: {len(holding_codes)}, 基金代码: {holding_codes}")
     else:
@@ -207,9 +257,11 @@ def fetch_fund_price_batch_sync(codes):
         # 创建一个字典来存储API返回的数据，以便快速查找
         api_data_dict = {}
         for fund_data in data['data']:
-            code = str(fund_data.get('code', ''))
+            # 确保基金代码是6位格式，与holdings中的键保持一致
+            raw_code = str(fund_data.get('code', ''))
+            formatted_code = raw_code.zfill(6)  # 补齐到6位
             fund_info = {
-                'code': code,
+                'code': formatted_code,
                 'name': fund_data.get('name', '--'),
                 'type': fund_data.get('type', '--'),
                 'netWorth': to_float(fund_data.get('netWorth')),
@@ -233,7 +285,7 @@ def fetch_fund_price_batch_sync(codes):
                 'netWorthDisplay': f"{to_float(fund_data.get('netWorth'))}<br><small>{fund_data.get('netWorthDate', '')}</small>" if fund_data.get('netWorth') else "--",
                 'expectWorthDisplay': f"{to_float(fund_data.get('expectWorth'))}<br><small>{fund_data.get('expectWorthDate', '')}</small>" if fund_data.get('expectWorth') else "--"
             }
-            api_data_dict[code] = fund_info
+            api_data_dict[formatted_code] = fund_info
 
         # 确保返回的数据包含所有请求的基金代码，对于API未返回的基金，返回默认值
         fund_data_list = []
