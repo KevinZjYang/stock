@@ -4,6 +4,8 @@ import sys
 import os
 import requests
 import time
+import math
+from datetime import datetime
 # 添加上级目录到路径，以便导入 models.py
 sys.path.append(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
@@ -15,6 +17,238 @@ from modules.models import (
 
 fund_trans_bp = Blueprint('fund_trans', __name__)
 
+
+def xirr(cashflows, dates, guess=0.1, tol=1e-6, max_iter=1000):
+    """
+    计算内部收益率（XIRR）- 使用二分查找法，更稳定
+    cashflows: 现金流列表（正数为收入，负数为支出）
+    dates: 对应的日期列表
+    返回: 年化收益率
+    """
+    if len(cashflows) != len(dates) or len(cashflows) < 2:
+        return None
+
+    # 转换为相对于起始日期的天数
+    start_date = min(dates)
+    days = [(d - start_date).days / 365.0 for d in dates]  # 转换为年
+
+    # 现金流总和应该为正（最终价值 > 投入）
+    total_cf = sum(cashflows)
+    if total_cf <= 0:
+        app_logger.info(f"[XIRR失败] 总现金流为{total_cf:.2f}，无法计算（需要正值）")
+        return None
+
+    def xnpv(rate, cashflows, days):
+        """计算净现值"""
+        return sum(cf * ((1 + rate) ** -d) for cf, d in zip(cashflows, days))
+
+    # 使用二分查找，在 [-99%, 1000%] 范围内查找
+    rate_low = -0.99  # -99%
+    rate_high = 10.0   # 1000%
+
+    npv_low = xnpv(rate_low, cashflows, days)
+    npv_high = xnpv(rate_high, cashflows, days)
+
+    # 如果端点已经足够接近0，直接返回
+    if abs(npv_low) < tol:
+        return rate_low
+    if abs(npv_high) < tol:
+        return rate_high
+
+    # 确保在搜索范围内有解
+    if npv_low * npv_high > 0:
+        # 尝试扩大搜索范围
+        rate_low = -0.9999
+        rate_high = 1000.0
+        npv_low = xnpv(rate_low, cashflows, days)
+        npv_high = xnpv(rate_high, cashflows, days)
+        if npv_low * npv_high > 0:
+            app_logger.info(f"[XIRR失败] 无法在扩展范围({rate_low}, {rate_high})内找到解，NPV范围: [{npv_low:.2f}, {npv_high:.2f}]")
+            return None  # 无法找到解
+
+    # 二分查找
+    for _ in range(max_iter):
+        rate_mid = (rate_low + rate_high) / 2
+        npv_mid = xnpv(rate_mid, cashflows, days)
+
+        if abs(npv_mid) < tol:
+            return rate_mid
+
+        if npv_low * npv_mid <= 0:
+            rate_high = rate_mid
+            npv_high = npv_mid
+        else:
+            rate_low = rate_mid
+            npv_low = npv_mid
+
+        if (rate_high - rate_low) < tol:
+            return rate_mid
+
+    return (rate_low + rate_high) / 2
+
+
+def parse_date(date_str):
+    """解析日期字符串为 datetime 对象"""
+    if not date_str:
+        return None
+    try:
+        date_str = str(date_str).split(' ')[0]  # 去掉时间部分
+        if '-' in date_str:
+            return datetime.strptime(date_str, '%Y-%m-%d')
+        elif '/' in date_str:
+            return datetime.strptime(date_str, '%Y/%m/%d')
+    except:
+        pass
+    return None
+
+
+def calculate_simple_return(fund_trans, current_net_worth, current_market_value, is_sold=False):
+    """
+    计算简单年化收益率（备用方法，当XIRR无法计算时使用）
+    适用于亏损的基金
+    fund_trans: 交易记录列表
+    current_net_worth: 当前净值
+    current_market_value: 当前市值金额（持仓基金）或最终卖出金额（已清仓基金）
+    is_sold: 是否已清仓
+    """
+    if not fund_trans:
+        return None
+
+    total_invested = 0  # 总投入
+    total_sells = 0  # 卖出总额（扣除手续费）
+    total_dividends = 0  # 分红总额
+    first_date = None
+    last_date = None
+
+    for t in fund_trans:
+        date = parse_date(t.get('date', ''))
+        if not date:
+            continue
+
+        if not first_date:
+            first_date = date
+        last_date = date
+
+        t_type = t.get('type')
+        amount = float(t.get('actual_amount', 0) or 0)
+        shares = float(t.get('shares', 0) or 0)
+        fee = float(t.get('fee', 0) or 0)
+
+        if t_type == '买入':
+            total_invested += abs(amount) + fee
+        elif t_type == '卖出':
+            total_sells += amount - fee
+        elif t_type == '分红' and shares == 0:
+            total_dividends += amount
+
+    if not first_date or total_invested <= 0:
+        return None
+
+    # 计算年化收益率
+    years = (last_date - first_date).days / 365.0
+    if years <= 0:
+        return None
+
+    # 总收益计算
+    if is_sold:
+        # 已清仓基金：收益 = 卖出总额 + 分红 - 总投入
+        total_return = total_sells + total_dividends - total_invested
+    else:
+        # 持仓基金：收益 = 当前市值 + 分红 - 总投入（不重复计算卖出）
+        # 注意：买入时投入已计算，卖出时收益已计入total_sells
+        # 简化模型：收益 = 当前市值 + 卖出总额 + 分红 - 总投入
+        total_return = current_market_value + total_sells + total_dividends - total_invested
+
+    # 简单年化收益率: (1 + 收益率)^(1/年) - 1
+    if total_return >= 0:
+        annualized_return = (1 + total_return / total_invested) ** (1 / years) - 1
+    else:
+        # 亏损情况：使用绝对值计算负收益
+        annualized_return = -((1 + abs(total_return) / total_invested) ** (1 / years) - 1)
+
+    app_logger.info(f"[简单年化] 投入={total_invested:.2f}, 卖出={total_sells:.2f}, 当前市值={current_market_value:.2f}, 分红={total_dividends:.2f}, 总收益={total_return:.2f}, 年份={years:.2f}, 年化={annualized_return:.4f}, 已清仓={is_sold}")
+
+    return annualized_return
+
+
+def calculate_fund_xirr(fund_trans, current_net_worth):
+    """
+    计算单个基金的年化收益率（XIRR）
+    fund_trans: 该基金的所有交易记录（已按日期排序）
+    current_net_worth: 当前净值
+    """
+    app_logger.info(f"[XIRR函数] fund_trans数量={len(fund_trans) if fund_trans else 0}, current_net_worth={current_net_worth}")
+    if not fund_trans or not current_net_worth:
+        app_logger.info(f"[XIRR函数] 参数不满足条件，返回None")
+        return None
+
+    cashflows = []
+    dates = []
+    total_shares = 0
+    total_cost = 0  # 记录总投入成本
+
+    for t in fund_trans:
+        date = parse_date(t.get('date', ''))
+        if not date:
+            continue
+
+        t_type = t.get('type')
+        amount = float(t.get('actual_amount', 0) or 0)
+        shares = float(t.get('shares', 0) or 0)
+        fee = float(t.get('fee', 0) or 0)
+
+        if t_type == '买入':
+            # 买入是资金支出（负）
+            cf = -(amount + fee)
+            cashflows.append(cf)
+            dates.append(date)
+            total_shares += shares
+            total_cost += abs(amount) + fee
+            app_logger.info(f"[XIRR调试] {date.strftime('%Y-%m-%d')} 买入: {cf}")
+        elif t_type == '卖出':
+            # 卖出是资金收入（正），扣除手续费
+            cf = amount - fee
+            cashflows.append(cf)
+            dates.append(date)
+            total_shares -= shares
+            app_logger.info(f"[XIRR调试] {date.strftime('%Y-%m-%d')} 卖出: {cf}")
+        elif t_type == '分红':
+            # 现金分红是收入（正）
+            if shares == 0:  # 现金分红
+                cashflows.append(amount)
+                dates.append(date)
+                app_logger.info(f"[XIRR调试] {date.strftime('%Y-%m-%d')} 分红: {amount}")
+
+    app_logger.info(f"[XIRR函数] 处理后: total_shares={total_shares}, cashflows数量={len(cashflows)}")
+
+    # 添加当前市值作为最终收入（只有持仓大于0时才添加）
+    if total_shares > 0:
+        final_value = total_shares * current_net_worth
+        cashflows.append(final_value)
+        dates.append(datetime.now())
+        app_logger.info(f"[XIRR调试] {datetime.now().strftime('%Y-%m-%d')} 当前市值: {final_value:.2f} (份额={total_shares:.2f})")
+    else:
+        app_logger.info(f"[XIRR函数] total_shares={total_shares} <= 0，不添加市值现金流")
+
+    if len(cashflows) < 2:
+        app_logger.info(f"[XIRR调试] 现金流不足2笔，返回None")
+        return None
+
+    # 计算天数
+    if dates:
+        start_date = min(dates)
+        day_list = [(d - start_date).days for d in dates]
+        app_logger.info(f"[XIRR调试] 现金流: {cashflows}, 天数: {day_list}")
+
+    # 计算 XIRR
+    try:
+        result = xirr(cashflows, dates)
+        app_logger.info(f"[XIRR调试] XIRR结果: {result}")
+        return result
+    except Exception as e:
+        app_logger.info(f"[XIRR调试] XIRR计算异常: {e}")
+        return None
+
 def calculate_fund_summary(transactions):
     """计算基金交易汇总数据 - 改进版本，正确处理成本计算"""
     if not transactions:
@@ -22,7 +256,7 @@ def calculate_fund_summary(transactions):
             "total_shares": 0, "total_cost": 0, "realized_profit": 0,
             "dividend_total": 0, "buy_count": 0, "sell_count": 0,
             "dividend_count": 0, "trade_count": 0, "total_fee": 0,
-            "market_value": 0  # 添加市值字段
+            "market_value": 0, "fund_performance": []
         }
 
     # 按日期升序排序，确保先处理的买入/分红在卖出之前
@@ -46,8 +280,8 @@ def calculate_fund_summary(transactions):
 
     sorted_transactions = sorted(transactions, key=get_sort_key)
 
-    # 调试日志：显示排序后的交易顺序
-    app_logger.info(f"[市值计算] 排序后交易记录: {[(t.get('date'), t.get('type'), t.get('code')) for t in sorted_transactions]}")
+    # 按基金代码分组记录，用于XIRR计算
+    fund_transactions = {}  # {code: [transactions...]}
 
     holdings = {}
     realized_profit = 0
@@ -63,6 +297,11 @@ def calculate_fund_summary(transactions):
         formatted_code = str(code).zfill(6)
         t_type = t.get('type')
 
+        # 记录该基金的交易用于XIRR计算
+        if formatted_code not in fund_transactions:
+            fund_transactions[formatted_code] = []
+        fund_transactions[formatted_code].append(t)
+
         shares = float(t.get('shares', 0)) if t.get('shares') is not None else 0
         amount = float(t.get('actual_amount', 0)) if t.get('actual_amount') is not None else 0
         fee = float(t.get('fee', 0)) if t.get('fee') is not None else 0
@@ -75,37 +314,24 @@ def calculate_fund_summary(transactions):
                 holdings[formatted_code] = {'shares': 0, 'cost': 0}
 
             holdings[formatted_code]['shares'] += shares
-            # 买入时增加成本，成本为实际交易金额（手续费已包含在内）
             holdings[formatted_code]['cost'] += abs(amount)
 
         elif t_type == '卖出':
             sell_count += 1
-            # 确保持仓记录存在，如果不存在则初始化为0
             if formatted_code not in holdings:
                 holdings[formatted_code] = {'shares': 0, 'cost': 0}
 
             if holdings[formatted_code]['shares'] > 0:
-                # 计算平均成本单价
                 avg_cost_per_share = holdings[formatted_code]['cost'] / holdings[formatted_code]['shares']
-
-                # 计算卖出份额对应的成本
                 sell_cost = shares * avg_cost_per_share
-
-                # 计算卖出收益（扣除手续费）
                 sell_income = abs(amount) - fee
-
-                # 计算已实现盈亏
                 realized_profit += (sell_income - sell_cost)
-
-                # 减少持仓份额和对应成本
                 holdings[formatted_code]['shares'] -= shares
                 holdings[formatted_code]['cost'] -= sell_cost
 
                 if holdings[formatted_code]['shares'] <= 0.0001:
                     del holdings[formatted_code]
             elif holdings[formatted_code]['shares'] < 0:
-                # 份额已经为负数，说明卖出超过持仓，这种异常情况需要特殊处理
-                # 只计算已实现盈亏，不修改持仓数据
                 avg_cost_per_share = abs(holdings[formatted_code]['cost'] / holdings[formatted_code]['shares'])
                 sell_cost = shares * avg_cost_per_share
                 sell_income = abs(amount) - fee
@@ -114,57 +340,169 @@ def calculate_fund_summary(transactions):
         elif t_type == '分红':
             dividend_count += 1
             dividend_total += abs(amount)
-            # 分红处理：判断是现金分红还是分红再投资
-            # 如果 shares > 0 且 actual_amount > 0，视为分红再投资
             if shares > 0:
-                # 分红再投资：增加持仓份额和成本
+                # 分红再投资
                 if formatted_code not in holdings:
                     holdings[formatted_code] = {'shares': 0, 'cost': 0}
                 holdings[formatted_code]['shares'] += shares
                 holdings[formatted_code]['cost'] += abs(amount)
             else:
-                # 现金分红：计入已实现盈亏，不影响持仓成本
+                # 现金分红
                 realized_profit += abs(amount)
 
     total_shares = sum(h['shares'] for h in holdings.values())
-    # 持仓成本总额 = 所有持仓基金的成本之和
     total_cost = sum(h['cost'] for h in holdings.values())
     total_cost = abs(total_cost)
 
-    app_logger.info(f"[市值计算] 当前持仓: {holdings}")
-
-    # 计算持仓市值：获取持有基金的实时净值并计算总市值
+    # 计算持仓市值和单基金收益率
     market_value = 0
-    if holdings:
-        # 获取所有持有基金的代码（已经是6位格式）
+    fund_performance = []
+    fund_names = {}  # 用于获取基金名称
+    sold_funds_xirr = {}  # 已清仓基金的年化收益
+
+    # 从交易记录中提取基金名称
+    for t in transactions:
+        code = str(t.get('code', '')).zfill(6)
+        name = t.get('name', '')
+        if code and name:
+            fund_names[code] = name
+
+    # 计算已完全卖出基金的XIRR（它们不在holdings中）
+    sold_fund_codes = set(fund_transactions.keys()) - set(holdings.keys())
+    if sold_fund_codes:
         holding_codes = list(holdings.keys())
-        app_logger.info(f"[市值计算] 持有基金代码: {holding_codes}")
-        if holding_codes:
-            # 获取基金的实时净值（holding_codes已经是6位格式）
-            fund_prices = fetch_fund_price_batch_sync(holding_codes)
-            app_logger.info(f"[市值计算] API返回基金数量: {len(fund_prices)}")
-            if fund_prices:
-                # 根据每只基金的持有份额和当前净值计算市值
-                for fund_data in fund_prices:
-                    code = fund_data.get('code')
-                    app_logger.info(f"[市值计算] 尝试匹配基金代码: {code}")
-                    # 由于holdings中的键已经是6位格式，直接匹配即可
-                    if code in holdings:
-                        # 使用估算净值(expectWorth)或单位净值(netWorth)，优先使用估算净值
-                        current_net_worth = fund_data.get('expectWorth') or fund_data.get('netWorth')
-                        if current_net_worth:
-                            holding_shares = holdings[code]['shares']
-                            fund_market_value = holding_shares * current_net_worth
-                            app_logger.info(f"[市值计算] {code}: 份额={holding_shares}, 净值={current_net_worth}, 市值={fund_market_value}")
-                            market_value += fund_market_value
-                        else:
-                            app_logger.warning(f"未能获取基金 {code} 的净值数据，跳过市值计算")
+        all_codes_for_price = list(holding_codes) + list(sold_fund_codes)
+        fund_prices_all = fetch_fund_price_batch_sync(all_codes_for_price) if all_codes_for_price else []
+        fund_price_dict = {f['code']: f for f in fund_prices_all} if fund_prices_all else {}
+
+        for code in sold_fund_codes:
+            if code in fund_transactions and len(fund_transactions[code]) >= 1:
+                # 获取当前净值用于计算最终价值
+                fund_info = fund_price_dict.get(code, {})
+                current_net_worth = fund_info.get('expectWorth') or fund_info.get('netWorth') or 1.0
+
+                # 计算已清仓基金的卖出总额
+                total_sells = 0
+                for t in fund_transactions[code]:
+                    t_type = t.get('type')
+                    if t_type == '卖出':
+                        amount = float(t.get('actual_amount', 0) or 0)
+                        fee = float(t.get('fee', 0) or 0)
+                        total_sells += amount - fee
+
+                xirr_result = calculate_fund_xirr(fund_transactions[code], current_net_worth)
+
+                # 如果XIRR无法计算，使用简单年化收益率作为备选
+                if xirr_result is None:
+                    simple_result = calculate_simple_return(fund_transactions[code], current_net_worth, total_sells, is_sold=True)
+                    if simple_result is not None:
+                        xirr_result = simple_result
+                        app_logger.info(f"[已清仓基金年化] {code}: XIRR=None, 使用简单年化={simple_result}")
                     else:
-                        app_logger.warning(f"返回的基金代码 '{code}' 在持仓中找不到匹配项，持仓代码: {holding_codes}")
-            else:
-                app_logger.warning(f"未能获取基金净值数据，持有基金数量: {len(holding_codes)}, 基金代码: {holding_codes}")
-    else:
-        app_logger.info("当前无持仓，市值为0")
+                        app_logger.info(f"[已清仓基金年化] {code}: XIRR=None, 简单年化也无法计算")
+                name = fund_names.get(code, code)
+                sold_funds_xirr[code] = {
+                    "code": code,
+                    "name": name,
+                    "xirr": round(xirr_result * 100, 2) if xirr_result else None,
+                    "status": "已清仓"
+                }
+                app_logger.info(f"[已清仓基金年化] {code}: 最终结果={xirr_result}")
+
+    if holdings:
+        holding_codes = list(holdings.keys())
+        fund_prices = fetch_fund_price_batch_sync(holding_codes)
+
+        if fund_prices:
+            for fund_data in fund_prices:
+                code = fund_data.get('code')
+                current_net_worth = fund_data.get('expectWorth') or fund_data.get('netWorth')
+                name = fund_data.get('name', fund_names.get(code, code))
+
+                if code in holdings:
+                    holding_shares = holdings[code]['shares']
+                    holding_cost = holdings[code]['cost']
+
+                    if current_net_worth:
+                        fund_mv = holding_shares * current_net_worth
+                        market_value += fund_mv
+
+                        # 计算XIRR（使用该基金的交易记录）
+                        xirr_result = None
+                        if code in fund_transactions:
+                            xirr_result = calculate_fund_xirr(fund_transactions[code], current_net_worth)
+                            app_logger.info(f"[年化收益] {code}: XIRR结果={xirr_result}, 当前净值={current_net_worth}")
+
+                            # 如果XIRR无法计算，使用简单年化收益率作为备选
+                            if xirr_result is None:
+                                simple_result = calculate_simple_return(fund_transactions[code], current_net_worth, fund_mv, is_sold=False)
+                                if simple_result is not None:
+                                    xirr_result = simple_result
+                                    app_logger.info(f"[年化收益] {code}: XIRR=None, 使用简单年化={simple_result}")
+
+                        fund_performance.append({
+                            "code": code,
+                            "name": name,
+                            "shares": round(holding_shares, 2),
+                            "cost": round(abs(holding_cost), 2),
+                            "market_value": round(fund_mv, 2),
+                            "xirr": round(xirr_result * 100, 2) if xirr_result else None
+                        })
+
+    # 计算整体年化收益率（使用所有交易记录）
+    overall_xirr = None
+    if holdings:
+        # 获取所有持仓基金的净值
+        holding_codes = list(holdings.keys())
+        fund_prices = fetch_fund_price_batch_sync(holding_codes)
+        fund_net_worths = {}
+        for fd in fund_prices:
+            code = fd.get('code')
+            nw = fd.get('expectWorth') or fd.get('netWorth')
+            if nw:
+                fund_net_worths[code] = nw
+
+        # 构建整体现金流的交易记录
+        all_cashflows = []
+        all_dates = []
+        total_shares_check = 0
+
+        for t in sorted_transactions:
+            date = parse_date(t.get('date', ''))
+            if not date:
+                continue
+
+            t_type = t.get('type')
+            code = str(t.get('code', '')).zfill(6)
+            amount = float(t.get('actual_amount', 0) or 0)
+            shares = float(t.get('shares', 0) or 0)
+            fee = float(t.get('fee', 0) or 0)
+
+            if t_type == '买入':
+                all_cashflows.append(-(amount + fee))
+                all_dates.append(date)
+                total_shares_check += shares
+            elif t_type == '卖出':
+                all_cashflows.append(amount - fee)
+                all_dates.append(date)
+                total_shares_check -= shares
+            elif t_type == '分红' and shares == 0:
+                all_cashflows.append(amount)
+                all_dates.append(date)
+
+        # 添加当前所有持仓的市值
+        if total_shares_check > 0:
+            total_current_value = 0
+            for code, shares in holdings.items():
+                nw = fund_net_worths.get(code, 0)
+                total_current_value += shares['shares'] * nw
+            if total_current_value > 0:
+                all_cashflows.append(total_current_value)
+                all_dates.append(datetime.now())
+
+        if len(all_cashflows) >= 2:
+            overall_xirr = xirr(all_cashflows, all_dates)
+            app_logger.info(f"[整体年化] 现金流数量={len(all_cashflows)}, XIRR={overall_xirr}")
 
     return {
         "total_shares": round(total_shares, 2),
@@ -172,11 +510,14 @@ def calculate_fund_summary(transactions):
         "realized_profit": round(realized_profit, 2),
         "dividend_total": round(dividend_total, 2),
         "total_fee": round(total_fee, 2),
-        "market_value": round(market_value, 2),  # 添加市值
+        "market_value": round(market_value, 2),
         "buy_count": buy_count,
         "sell_count": sell_count,
         "dividend_count": dividend_count,
-        "trade_count": len(transactions)
+        "trade_count": len(transactions),
+        "fund_performance": fund_performance,
+        "sold_funds_xirr": list(sold_funds_xirr.values()),
+        "overall_xirr": round(overall_xirr * 100, 2) if overall_xirr else None
     }
 
 def fetch_fund_price_batch_sync(codes):

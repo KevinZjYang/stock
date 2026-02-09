@@ -197,8 +197,18 @@
         }
 
         th { font-weight: 600; color: #555; }
-        
+
         tbody tr:hover { background: #f1f5f9; }
+
+        /* 收益对比表格样式 */
+        #performancePanel table {
+            font-size: 12px;
+        }
+
+        #performancePanel th {
+            background: #f0f7ff;
+            color: #2c3e50;
+        }
 
         .type-buy { color: #e74c3c; font-weight: bold; }
         .type-sell { color: #27ae60; font-weight: bold; }
@@ -413,6 +423,27 @@
     <div class="summary-container" id="summaryPanel">
         <!-- 动态生成 -->
         <div class="summary-card"><div class="summary-title">加载中...</div></div>
+    </div>
+
+    <!-- 各基金收益对比 -->
+    <div class="table-container" id="performancePanel" style="display: none;">
+        <h3 style="padding: 15px 20px 10px; margin: 0; color: #2c3e50;">各基金收益对比</h3>
+        <table>
+            <thead>
+                <tr>
+                    <th>基金代码</th>
+                    <th>基金名称</th>
+                    <th>状态</th>
+                    <th>持仓份额</th>
+                    <th>持仓成本</th>
+                    <th>持仓市值</th>
+                    <th>年化收益率</th>
+                </tr>
+            </thead>
+            <tbody id="performanceBody">
+                <!-- 动态生成 -->
+            </tbody>
+        </table>
     </div>
 
     <!-- 操作按钮区域 -->
@@ -798,7 +829,7 @@
 
         function renderSummary(data) {
             const panel = document.getElementById('summaryPanel');
-            
+
             // --- 关键修改：根据正负号决定颜色 ---
             const realizedProfit = data.realized_profit || 0;
             const realizedClass = realizedProfit >= 0 ? 'profit' : 'loss';
@@ -807,11 +838,18 @@
             const marketValue = data.market_value || 0;
             const totalCost = Math.abs(data.total_cost || 0);
             const totalShares = data.total_shares || 0;
-            
+
             // 计算浮动盈亏 (市值 - 成本)
             const floatingProfit = marketValue - totalCost;
             const floatingClass = floatingProfit >= 0 ? 'profit' : 'loss';
             const floatingValueClass = floatingProfit >= 0 ? 'profit-value' : 'loss-value';
+
+            // 整体年化收益率
+            const overallXirr = data.overall_xirr;
+            const overallXirrDisplay = overallXirr !== null && overallXirr !== undefined
+                ? overallXirr.toFixed(2) + '%'
+                : '--';
+            const overallXirrClass = overallXirr !== null && overallXirr >= 0 ? 'profit-value' : (overallXirr !== null ? 'loss-value' : '');
 
             panel.innerHTML = `
                 <div class="summary-card primary">
@@ -834,12 +872,61 @@
                     <div class="summary-value ${realizedValueClass}">${realizedProfit.toFixed(2)}</div>
                     <div class="summary-detail">分红: ${data.dividend_total.toFixed(2)}</div>
                 </div>
+                <div class="summary-card ${overallXirrClass}">
+                    <div class="summary-title">整体年化收益</div>
+                    <div class="summary-value ${overallXirrClass}">${overallXirrDisplay}</div>
+                    <div class="summary-detail">XIRR算法</div>
+                </div>
                 <div class="summary-card info">
                     <div class="summary-title">交易统计</div>
                     <div class="summary-value">${data.trade_count}</div>
                     <div class="summary-detail">买入: ${data.buy_count} | 卖出: ${data.sell_count} | 分红: ${data.dividend_count}</div>
                 </div>
             `;
+
+            // 渲染各基金收益对比
+            renderFundPerformance(data.fund_performance || [], data.sold_funds_xirr || []);
+        }
+
+        function renderFundPerformance(performance, soldFunds) {
+            const panel = document.getElementById('performancePanel');
+            const tbody = document.getElementById('performanceBody');
+
+            // 合并当前持仓和已清仓基金数据
+            const allPerformance = [
+                ...(performance || []).map(f => ({...f, status: '持仓'})),
+                ...(soldFunds || []).map(f => ({...f, status: '已清仓', shares: 0, cost: 0, market_value: 0}))
+            ];
+
+            if (allPerformance.length === 0) {
+                panel.style.display = 'none';
+                return;
+            }
+
+            panel.style.display = 'block';
+            tbody.innerHTML = '';
+
+            allPerformance.forEach(fund => {
+                const xirrClass = fund.xirr !== null && fund.xirr >= 0 ? 'profit-value' : (fund.xirr !== null ? 'loss-value' : '');
+                const xirrDisplay = fund.xirr !== null ? fund.xirr.toFixed(2) + '%' : '--';
+
+                const statusClass = fund.status === '已清仓' ? 'type-sell' : '';
+                const sharesDisplay = fund.status === '已清仓' ? '--' : fund.shares.toFixed(2);
+                const costDisplay = fund.status === '已清仓' ? '--' : fund.cost.toFixed(2);
+                const mvDisplay = fund.status === '已清仓' ? '--' : fund.market_value.toFixed(2);
+
+                const tr = document.createElement('tr');
+                tr.innerHTML = `
+                    <td>${fund.code}</td>
+                    <td>${fund.name || '--'}</td>
+                    <td class="${statusClass}">${fund.status}</td>
+                    <td>${sharesDisplay}</td>
+                    <td>${costDisplay}</td>
+                    <td>${mvDisplay}</td>
+                    <td class="${xirrClass}">${xirrDisplay}</td>
+                `;
+                tbody.appendChild(tr);
+            });
         }
 
         function renderTable(data) {
