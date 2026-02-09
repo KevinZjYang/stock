@@ -684,7 +684,9 @@ def manage_transactions():
     if request.method == 'GET':
         app_logger.info(f"获取基金交易记录请求来自: {client_ip}")
         transactions = load_fund_transactions()
-        summary = calculate_fund_summary(transactions)
+
+        # 尝试使用缓存的汇总数据
+        summary = get_cached_summary(use_cache=True)
 
         response = make_response(jsonify({
             'transactions': transactions,
@@ -825,3 +827,162 @@ def export_transactions():
         as_attachment=True,
         download_name=filename
     )
+
+
+# ==================== 缓存相关函数 ====================
+
+def get_cached_summary(use_cache: bool = True) -> Dict:
+    """
+    获取缓存的汇总数据
+    use_cache: 是否使用缓存
+    返回: 汇总数据字典
+    """
+    today = datetime.now().strftime('%Y-%m-%d')
+    cache_key = 'fund_summary'
+
+    if use_cache:
+        # 尝试从缓存读取
+        cached = get_fund_cache(cache_key, today)
+        if cached:
+            app_logger.info(f"[缓存] 使用缓存的基金汇总数据 ({today})")
+            return cached
+
+    # 没有缓存，重新计算
+    app_logger.info(f"[缓存] 重新计算基金汇总数据")
+    transactions = load_fund_transactions()
+    summary = calculate_fund_summary(transactions)
+
+    # 更新缓存
+    set_fund_cache(cache_key, summary, today)
+
+    return summary
+
+
+def refresh_fund_cache(force: bool = False) -> Dict:
+    """
+    刷新基金缓存
+    force: 是否强制刷新（忽略日期检查）
+    返回: 汇总数据字典
+    """
+    today = datetime.now().strftime('%Y-%m-%d')
+    cache_key = 'fund_summary'
+
+    # 检查是否需要刷新（当天已计算过就不需要了，除非强制刷新）
+    last_date = get_fund_cache_date(cache_key)
+    if not force and last_date == today:
+        app_logger.info(f"[缓存] 当天已计算过，跳过刷新")
+        return get_fund_cache(cache_key, today) or get_cached_summary(False)
+
+    # 重新计算并缓存
+    app_logger.info(f"[缓存] 刷新基金缓存")
+    return get_cached_summary(use_cache=False)
+
+
+# ==================== 定时任务 ====================
+
+def scheduled_fund_cache_update():
+    """
+    定时任务：更新基金缓存
+    每天晚上 21:00 执行
+    """
+    app_logger.info("[定时任务] 开始执行基金缓存更新")
+    try:
+        result = refresh_fund_cache(force=True)
+        app_logger.info(f"[定时任务] 基金缓存更新完成")
+        return True
+    except Exception as e:
+        app_logger.error(f"[定时任务] 基金缓存更新失败: {e}")
+        return False
+
+
+def cache_scheduler_thread():
+    """缓存定时任务线程（使用简单的时间检查）"""
+    import time as time_module
+
+    app_logger.info("[缓存调度器] 启动基金缓存定时任务")
+
+    while True:
+        try:
+            now = datetime.now()
+            current_hour = now.hour
+            current_minute = now.minute
+
+            # 每天 21:00 执行
+            if current_hour == 21 and current_minute == 0:
+                app_logger.info(f"[缓存调度器] 检测到21:00，执行缓存更新")
+                scheduled_fund_cache_update()
+                # 等待1分钟避免重复执行
+                time_module.sleep(60)
+
+            # 检查是否需要执行（如果错过了21:00，当天还没执行过）
+            if current_hour > 21:
+                cache_key = 'fund_summary'
+                last_date = get_fund_cache_date(cache_key)
+                today = now.strftime('%Y-%m-%d')
+                if last_date != today:
+                    app_logger.info(f"[缓存调度器] 检测到已过21:00但当天未更新，执行缓存更新")
+                    scheduled_fund_cache_update()
+
+            # 每30秒检查一次
+            time_module.sleep(30)
+        except Exception as e:
+            app_logger.error(f"[缓存调度器] 错误: {e}")
+            time_module.sleep(60)
+
+
+# ==================== API 接口 ====================
+
+@fund_trans_bp.route('/cache/refresh', methods=['POST'])
+def refresh_cache():
+    """手动刷新缓存接口"""
+    data = request.get_json() or {}
+    force = data.get('force', False)
+
+    app_logger.info(f"手动刷新基金缓存，force={force}")
+
+    try:
+        result = refresh_fund_cache(force=force)
+        return jsonify({
+            'success': True,
+            'message': '缓存刷新成功',
+            'data': {
+                'total_shares': result.get('total_shares'),
+                'total_cost': result.get('total_cost'),
+                'market_value': result.get('market_value'),
+                'realized_profit': result.get('realized_profit'),
+                'overall_xirr': result.get('overall_xirr')
+            }
+        })
+    except Exception as e:
+        app_logger.error(f"刷新缓存失败: {e}")
+        return jsonify({'success': False, 'error': str(e)}), 500
+
+
+@fund_trans_bp.route('/cache/status', methods=['GET'])
+def cache_status():
+    """获取缓存状态接口"""
+    cache_key = 'fund_summary'
+    last_date = get_fund_cache_date(cache_key)
+    today = datetime.now().strftime('%Y-%m-%d')
+
+    return jsonify({
+        'cache_date': last_date,
+        'is_today': last_date == today,
+        'need_refresh': last_date != today
+    })
+
+
+# ==================== 启动定时任务 ====================
+
+def start_cache_scheduler():
+    """启动缓存定时任务调度器（使用简单线程）"""
+    import threading
+
+    scheduler_thread = threading.Thread(
+        target=cache_scheduler_thread,
+        daemon=True,
+        name='FundCacheScheduler'
+    )
+    scheduler_thread.start()
+    app_logger.info("[定时任务] 基金缓存调度器已启动（每天21:00执行）")
+    return scheduler_thread

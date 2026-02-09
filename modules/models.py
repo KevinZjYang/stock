@@ -1099,6 +1099,17 @@ def init_db():
     cursor.execute('CREATE INDEX IF NOT EXISTS idx_stocks_code ON stocks(code)')
     cursor.execute('CREATE INDEX IF NOT EXISTS idx_fund_transactions_code ON fund_transactions(code)')
 
+    # 创建基金每日缓存表（预计算汇总数据）
+    cursor.execute('''
+        CREATE TABLE IF NOT EXISTS fund_daily_cache (
+            cache_date TEXT NOT NULL,
+            cache_key TEXT NOT NULL,
+            cache_data TEXT NOT NULL,
+            created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+            PRIMARY KEY (cache_date, cache_key)
+        )
+    ''')
+
     conn.commit()
     conn.close()
 
@@ -1556,6 +1567,116 @@ def load_excel_data_to_db():
 
     except Exception as e:
         app_logger.error(f"导入Excel数据到数据库失败: {e}")
+
+
+# ==================== 基金缓存相关函数 ====================
+
+def get_fund_cache(cache_key: str, cache_date: str = None) -> Optional[Dict]:
+    """
+    获取基金缓存数据
+    cache_key: 缓存键名
+    cache_date: 缓存日期，默认为今天
+    返回: 缓存的字典数据，如果不存在或已过期返回 None
+    """
+    if cache_date is None:
+        cache_date = datetime.now().strftime('%Y-%m-%d')
+
+    conn = get_db_connection()
+    cursor = conn.cursor()
+
+    try:
+        cursor.execute('''
+            SELECT cache_data FROM fund_daily_cache
+            WHERE cache_date = ? AND cache_key = ?
+        ''', (cache_date, cache_key))
+
+        result = cursor.fetchone()
+        if result:
+            return json.loads(result[0])
+        return None
+    except Exception as e:
+        app_logger.error(f"获取基金缓存失败: {e}")
+        return None
+    finally:
+        conn.close()
+
+
+def set_fund_cache(cache_key: str, cache_data: Dict, cache_date: str = None):
+    """
+    设置基金缓存数据
+    cache_key: 缓存键名
+    cache_data: 要缓存的字典数据
+    cache_date: 缓存日期，默认为今天
+    """
+    if cache_date is None:
+        cache_date = datetime.now().strftime('%Y-%m-%d')
+
+    conn = get_db_connection()
+    cursor = conn.cursor()
+
+    try:
+        cursor.execute('''
+            INSERT OR REPLACE INTO fund_daily_cache (cache_date, cache_key, cache_data)
+            VALUES (?, ?, ?)
+        ''', (cache_date, cache_key, json.dumps(cache_data, ensure_ascii=False)))
+
+        conn.commit()
+        app_logger.info(f"已更新基金缓存: {cache_date}/{cache_key}")
+    except Exception as e:
+        app_logger.error(f"设置基金缓存失败: {e}")
+    finally:
+        conn.close()
+
+
+def get_fund_cache_date(cache_key: str) -> Optional[str]:
+    """
+    获取指定缓存键的最后更新日期
+    cache_key: 缓存键名
+    返回: 日期字符串，如果不存在返回 None
+    """
+    conn = get_db_connection()
+    cursor = conn.cursor()
+
+    try:
+        cursor.execute('''
+            SELECT MAX(cache_date) FROM fund_daily_cache WHERE cache_key = ?
+        ''', (cache_key,))
+
+        result = cursor.fetchone()
+        return result[0] if result else None
+    except Exception as e:
+        app_logger.error(f"获取缓存日期失败: {e}")
+        return None
+    finally:
+        conn.close()
+
+
+def clear_fund_cache(cache_key: str = None, cache_date: str = None):
+    """
+    清除基金缓存
+    cache_key: 缓存键名，为空则清除所有
+    cache_date: 日期，为空则清除所有日期
+    """
+    conn = get_db_connection()
+    cursor = conn.cursor()
+
+    try:
+        if cache_key and cache_date:
+            cursor.execute('DELETE FROM fund_daily_cache WHERE cache_date = ? AND cache_key = ?',
+                         (cache_date, cache_key))
+        elif cache_key:
+            cursor.execute('DELETE FROM fund_daily_cache WHERE cache_key = ?', (cache_key,))
+        elif cache_date:
+            cursor.execute('DELETE FROM fund_daily_cache WHERE cache_date = ?', (cache_date,))
+        else:
+            cursor.execute('DELETE FROM fund_daily_cache')
+
+        conn.commit()
+        app_logger.info(f"已清除基金缓存: {cache_date or '所有日期'}/{cache_key or '所有键'}")
+    except Exception as e:
+        app_logger.error(f"清除基金缓存失败: {e}")
+    finally:
+        conn.close()
 
 
 

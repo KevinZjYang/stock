@@ -766,24 +766,18 @@
 
         function loadData() {
             showLoading();
-            // 加载统计数据
-            fetch('/api/fund_trans/summary')
+            // 一次性获取交易记录和汇总数据（避免重复计算）
+            fetch('/api/fund_trans/transactions')
                 .then(res => res.json())
-                .then(summaryData => {
-                    renderSummary(summaryData);
-                    // 加载列表数据
-                    return fetch('/api/fund_trans/transactions');
-                })
-                .then(res => res.json())
-                .then(transactionData => {
-                    // 检查返回的数据结构 - 如果是对象包含transactions数组，则使用transactions
-                    if (transactionData.transactions !== undefined) {
+                .then(data => {
+                    // 检查返回的数据结构
+                    if (data.transactions !== undefined && data.summary !== undefined) {
                         // 数据结构为 {transactions: [...], summary: {...}}
-                        // 注意：我们已经单独获取了summary，所以这里只需要transactions
-                        renderTable(transactionData.transactions);
+                        renderSummary(data.summary);
+                        renderTable(data.transactions);
                     } else {
-                        // 直接是交易数组
-                        renderTable(transactionData);
+                        // 兼容旧格式：直接是交易数组
+                        renderTable(data.transactions || data);
                     }
                     hideLoading();
                 })

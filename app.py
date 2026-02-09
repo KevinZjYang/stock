@@ -180,5 +180,14 @@ except ImportError as e:
     print(f"Warning: Could not import update functions: {e}")
 
 
+# ==================== 基金缓存定时任务 ====================
+try:
+    from modules.fund_trans import start_cache_scheduler
+    cache_scheduler = start_cache_scheduler()
+    print("Successfully started fund cache scheduler")
+except ImportError as e:
+    print(f"Warning: Could not start fund cache scheduler: {e}")
+
+
 if __name__ == '__main__':
     app.run(debug=True, host='0.0.0.0', port=3333)
