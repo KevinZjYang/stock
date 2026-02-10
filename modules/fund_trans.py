@@ -5,6 +5,7 @@ import os
 import requests
 import time
 import math
+import threading
 from datetime import datetime
 from typing import Dict, List, Optional  # 添加类型注解导入
 # 添加上级目录到路径，以便导入 models.py
@@ -19,6 +20,7 @@ from modules.models import (
 )
 
 fund_trans_bp = Blueprint('fund_trans', __name__)
+_fund_summary_lock = threading.Lock()
 
 
 def xirr(cashflows, dates, guess=0.1, tol=1e-6, max_iter=1000):
